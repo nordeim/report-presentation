@@ -1,4 +1,11 @@
-@import "tailwindcss";
+/* source("../") = src/ (relative to this file): pins Tailwind v4 automatic
+   content detection to the app tree. Without it the scanner walks the whole
+   repo — including machine-local skills/ symlinks — and on machines where
+   those links resolve outside the project root, Turbopack panics with
+   "FileSystemPath … leaves the filesystem root" (next build is fatal).
+   All UI code lives under src/, so scoping costs nothing and removes the
+   dependency on what happens to sit next to the repo on disk. */
+@import "tailwindcss" source("../");
 
 @theme {
   --font-display: var(--font-syne), "Syne", sans-serif;
