@@ -1,11 +1,12 @@
 # Nave & Spire
 
-![Next.js](https://img.shields.io/badge/Next.js-16.2.6-000000?logo=next.js&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16.3.4-000000?logo=next.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.2.6-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.1.17-06B6D4?logo=tailwindcss&logoColor=white)
 ![Drizzle ORM](https://img.shields.io/badge/Drizzle%20ORM-0.45.2-C5F74F?logo=drizzle&logoColor=black)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-vitest%2018%2F18-brightgreen)
 
 A design audit journal comparing two Singapore parish websites — **Church of the Blessed Sacrament (BSC)** and **Church of Our Lady of Lourdes (OLL)** — across ten evidence-backed criteria. Scores are derived from source tokens, components, and information architecture, not from rendered screenshots.
 
@@ -30,14 +31,15 @@ Nave & Spire is a Next.js 16 web application that presents a structured, evidenc
 
 | Layer | Technology | Version | Purpose |
 |-------|------------|---------|---------|
-| Framework | Next.js (App Router) | 16.2.6 | RSC, routing, API routes |
+| Framework | Next.js (App Router) | 16.3.4 | RSC, routing, API routes |
 | UI | React | 19.2.6 | Component model |
 | Language | TypeScript | 5.9.3 | Strict mode, no `any` |
 | Styling | Tailwind CSS | 4.1.17 | CSS-first `@theme` config |
 | Database | PostgreSQL | 17 | Primary data store |
 | ORM | Drizzle ORM | 0.45.2 | Type-safe queries, migrations |
-| Fonts | next/font | 16.2.6 | Self-hosted Google Fonts (6 families) |
-| Images | next/image | 16.2.6 | Optimized, priority-loaded heroes |
+| Testing | Vitest + RTL | latest | Unit/component tests (`npm test`) |
+| Fonts | next/font | 16.3.4 | Self-hosted Google Fonts (6 families) |
+| Images | next/image | 16.3.4 | Optimized, priority-loaded heroes |
 
 ### Architectural Principles
 
@@ -61,13 +63,23 @@ flowchart TB
     H --> I[Render page]
 ```
 
+### Layered Structure
+
+```
+Layer 1 — App (RSC pages + API routes)   src/app/**    → may import Layer 2 + 3
+Layer 2 — Components (RSC + client)      src/components/** → may import Layer 3 (type-only @/db/schema allowed)
+Layer 3 — Domain (queries, seed, rate-limit, format, audit-data, db) src/lib/** + src/db/**
+```
+
+All DB access goes through `src/lib/queries.ts` (`getFullAudit()`, `insertReview()`), which calls `ensureSeeded()` first. `POST /api/reviews` additionally passes a per-IP fixed-window rate limiter (`src/lib/server/rate-limit.ts`, 5 req/min, bounded client map).
+
 ## File Hierarchy
 
 ```
 📂 src/
 ├── 📂 app/                          # Next.js App Router
 │   ├── 📂 api/                      # Route handlers
-│   │   ├── 📂 reviews/route.ts      # POST /api/reviews (submit review)
+│   │   ├── 📂 reviews/route.ts      # POST /api/reviews (submit review, rate-limited)
 │   │   ├── 📂 health/route.ts       # GET /api/health (DB check)
 │   │   └── 📂 audit/route.ts        # GET /api/audit (full JSON export)
 │   ├── 📂 compare/page.tsx          # Side-by-side score comparison
@@ -75,6 +87,8 @@ flowchart TB
 │   ├── 📂 palettes/page.tsx         # Token swatches with copy
 │   ├── 📂 reviews/page.tsx          # Visitor scoreboard + form
 │   ├── 📂 method/page.tsx           # Methodology & sources
+│   ├── 📄 error.tsx                 # DB-aware error boundary ('use client')
+│   ├── 📄 not-found.tsx             # 404 "Folio not found."
 │   ├── 📄 globals.css               # Tailwind v4 @theme + motion utilities
 │   ├── 📄 layout.tsx                # Root: fonts, Masthead, StudioFooter
 │   └── 📄 page.tsx                  # Home: hero, verdict, score bars, IA, type
@@ -86,13 +100,18 @@ flowchart TB
 │   ├── 📄 CopySwatch.tsx            # Token card + clipboard ('use client')
 │   └── 📄 ReviewForm.tsx            # Submission form ('use client')
 ├── 📂 db/                           # Drizzle ORM
-│   ├── 📄 index.ts                  # Pool singleton + drizzle instance
-│   └── 📄 schema.ts                 # 6 tables (sites, criteria, scores, findings, palette_tokens, reviews)
-└── 📂 lib/                          # Business logic
-    ├── 📄 queries.ts                # getFullAudit(), insertReview()
-    ├── 📄 seed.ts                   # ensureSeeded() — idempotent, race-safe
-    ├── 📄 format.ts                 # Pure formatters (score, severity, contrast)
-    └── 📄 audit-data.ts             # ALL seed constants (sites, criteria, scores, findings, palettes)
+│   ├── 📄 index.ts                  # Pool singleton (globalThis) + drizzle instance
+│   ├── 📄 schema.ts                 # 6 tables (sites, criteria, scores, findings, palette_tokens, reviews)
+│   └── 📄 schema.test.ts            # Schema ≡ committed migration pin
+├── 📂 lib/                          # Business logic
+│   ├── 📂 server/rate-limit.ts      # Fixed-window per-IP limiter (+ .test.ts)
+│   ├── 📄 queries.ts                # getFullAudit(), insertReview()
+│   ├── 📄 seed.ts                   # ensureSeeded() — idempotent, race-safe
+│   ├── 📄 format.ts                 # Pure formatters (score, severity, contrast)
+│   ├── 📄 format.test.ts            # Unit tests incl. no-raw-hex token rule
+│   └── 📄 audit-data.ts             # ALL seed constants (sites, criteria, scores, findings, palettes)
+└── 📂 regression/
+    └── 📄 docs-drift.test.ts        # Retired-identifier scan (maison_dev guard)
 ```
 
 ## Quick Start
@@ -217,16 +236,23 @@ All gated by `@media (prefers-reduced-motion: reduce)` → durations = `0.01ms` 
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/reviews` | POST | ❌ | Submit review (name, site, 3× scores 1–10, comment 12–800 chars) |
+| `/api/reviews` | POST | ❌ (rate-limited) | Submit review (name, site, 3× scores 1–10, comment 12–800 chars) — 5 req/min per IP, then `429` + `Retry-After` |
 | `/api/health` | GET | ❌ | DB connectivity check (`select 1`) |
 | `/api/audit` | GET | ❌ | Full audit JSON (sites, criteria, scores, findings, tokens, reviews) |
 
-**Response envelope**:
-```json
-// Success
-{ "ok": true, "data": T }
+**Response envelope** (as implemented):
+
+```jsonc
+// Success — payload key names the resource
+{ "ok": true, "audit": T }   // GET /api/audit
+{ "ok": true, "review": T }  // POST /api/reviews (201)
+{ "ok": true }               // GET /api/health
 // Error
-{ "ok": false, "error": "string" }
+{ "error": "string" }        // 400 validation, body varies by route
+{ "ok": false }              // GET /api/health on DB failure (500)
+{ "ok": false, "error": "string" } // GET /api/audit on failure (500)
+// Rate limited (POST /api/reviews)
+{ "error": "Too many reviews from this address. Try again shortly." } // 429 + Retry-After header
 ```
 
 ## Commands
@@ -237,6 +263,7 @@ All gated by `@media (prefers-reduced-motion: reduce)` → durations = `0.01ms` 
 | Dev server | `npm run dev` (`npx next dev --webpack` if Turbopack panics) |
 | Type check | `npm run typecheck` |
 | Lint | `npm run lint` |
+| Tests (unit/component) | `npm test` (Vitest, once-off) · `npm run test:watch` |
 | Build | `npm run build` |
 | DB: setup (fresh clone → prod) | `npm run db:setup` (= `db:generate` + `db:migrate` + `db:seed`) |
 | DB: generate migration | `npm run db:generate` (`drizzle-kit generate`) |
@@ -266,6 +293,10 @@ npm run start
 - **Cloudflare Pages/Workers**: Use `@cloudflare/next-on-pages` adapter; D1 not supported (requires PostgreSQL)
 - **Docker**: Multi-stage build with `node:22-alpine` base; copy `.next/standalone` for minimal image
 
+### Security Headers
+
+`next.config.ts` emits `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, and a baseline CSP (`default-src 'self'`, `frame-ancestors 'none'`) on every route. CSP uses `'unsafe-inline'` for scripts/styles because Next's inline bootstrap requires it without a nonce middleware — strict nonce-based CSP is future work (see `docs/CODE_AUDIT_2026-09-07.md`).
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -274,6 +305,7 @@ npm run start
 | `npm run build` fails / pages show "DATABASE_URL is required" at **runtime** | Build itself does NOT need DB (`force-dynamic` skips `getFullAudit()` at build). Runtime does — ensure `DATABASE_URL` in `.env.local` matches `docker-compose.yml` (`nave_spire_dev`). Check `GET /api/health` — see `src/app/error.tsx` fallback for DB hint. |
 | `npx next dev` panics `FileSystemPath … mattpocok-skills` | Known Tailwind v4 + Turbopack dev FS bug (only `next dev` with Turbopack). Use `npx next dev --webpack` locally; `next build` (also Turbopack) is unaffected. See `VALIDATION_REPORT.md` Appendix D. |
 | `npm run lint` shows warnings from `/skills/` directory | Expected — warnings come from tracked `skills/` folder, not project code. Ignore. |
+| `POST /api/reviews` returns `429` | Rate limit reached (5 req/min per IP, in-memory per instance). Wait for the `Retry-After` window. Behind serverless multi-instance, use a shared store for global limits. |
 | Page returns empty data on fresh DB | Ensure `ensureSeeded()` runs — it's called by `getFullAudit()`. Check DB connectivity. |
 | Motion doesn't respect `prefers-reduced-motion` | All animations use transform/opacity only. Verify CSS in `globals.css` uses `@media (prefers-reduced-motion: reduce)`. |
 | Fonts not loading in production | `next/font` self-hosts at build time. Ensure `npm run build` completes without network errors. |

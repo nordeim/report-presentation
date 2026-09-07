@@ -6,9 +6,9 @@ description: >
   across 10 evidence-backed criteria. Covers the editorial @theme design system, RSC + force-dynamic
   + ensureSeeded() data contract, 6-table Drizzle schema, 18-token palettes, motion system,
   a11y floor, API validation, DB lifecycle, and every hard-won lesson from the audit → polish → live-DB verification.
-version: 1.0.0
+version: 1.1.0
 last_updated: 2026-09-07
-project_state: 6 components (3 client), 6 tables, 10 criteria, 36 palette tokens, 10 findings, 3 reviews seeded, 4 placeholder heroes, CI green
+project_state: 6 components (3 client + error boundary), 6 tables, 10 criteria, 36 palette tokens, 10 findings, 18 vitest tests green, security headers + review rate limiter shipped, CI lint+typecheck+test+build green
 tags:
   - nextjs-16
   - react-19
@@ -88,7 +88,7 @@ tags:
 
 | Layer | Technology | Version | Source | Critical Note |
 |-------|------------|---------|--------|---------------|
-| Framework | Next.js (App Router, `force-dynamic`) | `16.2.6` | `package.json: next` | Turbopack default in 16; `proxy.ts` does not exist — no middleware. `next build` uses Turbopack and succeeds without DB; `next dev` with Turbopack has a known panic (see §10). |
+| Framework | Next.js (App Router, `force-dynamic`) | `16.3.4` | `package.json: next` (lockfile; range `^16.2.6`, bumped via `npm audit fix`) | Turbopack default in 16; `proxy.ts` does not exist — no middleware. `next build` uses Turbopack and succeeds without DB; `next dev` with Turbopack has a known panic (see §10). `next.config.ts` emits security headers (see §14.5). |
 | UI Runtime | React / React-DOM | `19.2.6` | `package.json` | RSC by default; `'use client'` only for 3 components. |
 | Language | TypeScript (strict) | `5.9.3` | `package.json` + `tsconfig.json` | `strict:true`, `noEmit:true`, `isolatedModules:true`, `moduleResolution:bundler`, `jsx:react-jsx`, `target:ES2017`, `baseUrl:.`, `paths:@/*→./src/*`, `exclude:[skills]`. Never `any`. |
 | Styling | Tailwind CSS (CSS-first `@theme`) | `4.1.17` + `@tailwindcss/postcss@4.1.17`, `postcss@8.5.8` | `package.json` + `postcss.config.mjs` | **No `tailwind.config.ts`** — all tokens in `src/app/globals.css @theme`. |
@@ -108,7 +108,7 @@ tags:
 |-----|----------|-------|---------|------|
 | `DATABASE_URL` | Yes | `.env.local` (gitignored) | `postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev` | Must match `docker-compose.yml` + `drizzle.config.json`. Plain postgres alt: `postgresql://postgres:postgres@127.0.0.1:5432/app_db`. Prod add `?sslmode=require`. Template at `.env.example`. |
 
-`src/db/index.ts:7` throws `DATABASE_URL is required` if absent — this is correct; `npm run build` still succeeds because `force-dynamic` skips DB at build, but any runtime request will throw (caught by `src/app/error.tsx` + `GET /api/health` → 500 via `db.execute(sql\`select 1\`)`).
+`src/db/index.ts:8` throws `DATABASE_URL is required` if absent — this is correct; `npm run build` still succeeds because `force-dynamic` skips DB at build, but any runtime request will throw (caught by `src/app/error.tsx` + `GET /api/health` → 500 via `db.execute(sql\`select 1\`)`).
 
 ---
 
@@ -153,7 +153,7 @@ curl -s http://127.0.0.1:3000/api/audit | jq '.audit.sites | length' # 2
 
 | File | Purpose | Key Detail |
 |------|---------|------------|
-| `next.config.ts` | Next config | Empty `const nextConfig: NextConfig = {}` — no rewrites, no headers, no remote image patterns. |
+| `next.config.ts` | Next config + security headers | `headers()` on every route: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, baseline CSP (`default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'` — `'unsafe-inline'` required by Next inline bootstrap; strict nonce CSP is future work). |
 | `tsconfig.json` | TS strict | `strict:true, noEmit:true, isolatedModules:true, moduleResolution:bundler, jsx:react-jsx, baseUrl:., paths:{@/*:["./src/*"]}, include:[next-env.d.ts, **/*.ts, **/*.tsx, .next/types/**], exclude:[node_modules, dist, .next, coverage, skills]`. |
 | `eslint.config.mjs` | Lint (flat) | `import {defineConfig, globalIgnores}` + `eslint-config-next/core-web-vitals` + `globalIgnores([".next/**","out/**","build/**","next-env.d.ts"])`. |
 | `postcss.config.mjs` | PostCSS | `plugins: {"@tailwindcss/postcss": {}}` — Tailwind v4 CSS-first, no `autoprefixer` needed. |
@@ -162,7 +162,8 @@ curl -s http://127.0.0.1:3000/api/audit | jq '.audit.sites | length' # 2
 | `infrastructure/postgres/init/00-create-extensions.sql` | Init extensions | `CREATE EXTENSION IF NOT EXISTS pgcrypto;` + `pg_trgm;` — runs once on first `docker compose up -d`. |
 | `.env.example` | Env template | 1 var `DATABASE_URL` with local/alt/prod comments — `nave_spire_dev` primary. |
 | `.env.local` | Env (gitignored) | Same as `.env.example` but active; must stay in sync with `docker-compose.yml`. |
-| `.github/workflows/ci.yml` | CI | `runs-on: ubuntu-latest`, `setup-node@v4 (22, npm cache)`, `npm ci` → `npm run lint` → `npm run typecheck` → `npm run build` (with dummy `DATABASE_URL` for the `drizzle` import guard). |
+| `.github/workflows/ci.yml` | CI | `runs-on: ubuntu-latest`, `setup-node@v4 (22, npm cache)`, `npm ci` → `npm run lint` → `npm run typecheck` → `npm test` → `npm run build` (with dummy `DATABASE_URL` for the `drizzle` import guard). |
+| `vitest.config.ts` | Test runner | jsdom env, `@vitejs/plugin-react`, `@` alias → `./src`, include `src/**/*.test.{ts,tsx}`. `npm test` = `vitest run`, `npm run test:watch` = `vitest`. |
 | `.gitignore` | Ignore | Excludes `.env.local`, `.next/`, `node_modules/`, `tsconfig.tsbuildinfo`, etc. |
 
 ### 3.3 Scripts
@@ -209,6 +210,8 @@ curl -s http://127.0.0.1:3000/api/audit | jq '.audit.sites | length' # 2
   --color-rose: #8a4a5f;        /* OLL Mystical Rose */
   --color-sage: #2f4f37;        /* OLL formation */
   --color-cream: #f8f5ef;       /* card surface */
+  --color-high-sev: #8f5038;    /* high-severity badge (audit M4) */
+  --color-gold-700: #85641c;    /* medium-severity text = bsc-gold-700 value */
 
   --shadow-journal: 0 24px 80px -28px rgba(22, 19, 14, 0.35);
 }
@@ -290,18 +293,20 @@ Layer 2 — Components (RSC + 3 client)      src/components/** → may import La
 Layer 3 — Domain (queries + seed + format + audit-data + db)  src/lib/** + src/db/** → never import Layer 1/2
 ```
 
-**Golden Rule:** No `src/db` import in `src/components` (except `@/lib/queries` which wraps it). All DB access goes through `src/lib/queries.ts` (`getFullAudit()`, `insertReview()`) which both call `ensureSeeded()` first — direct `db.select()` without seeding is an anti-pattern (see §9).
+**Golden Rule:** No runtime `src/db` import in `src/components` (except `@/lib/queries` which wraps it). Type-only imports (`import type { Finding } from "@/db/schema"`, used by `FindingsBoard`) are allowed — they are erased at build and create no runtime coupling. All DB access goes through `src/lib/queries.ts` (`getFullAudit()`, `insertReview()`) which both call `ensureSeeded()` first — direct `db.select()` without seeding is an anti-pattern (see §9).
 
-### 5.2 Component Directory — 6 files, 3 client
+### 5.2 Component Directory — 6 files, 3 client islands + error boundary
 
 | File | Type | Props | Purpose |
 |------|------|-------|---------|
 | `Masthead.tsx` | **RSC** (no `'use client'`) | none | Sticky `header` (`z-40`, `border-ink/10`, `bg-paper/90 backdrop-blur-md`), brand `Vol. I · Nave & Spire`, two navs: desktop (`hidden md:flex` 6 links) + mobile (`flex md:hidden` 4 links, `overflow-x-auto`). Currently **static** — no drawer state (intentional; upstream drawer is aspirational — see §8). |
 | `StudioFooter.tsx` | **RSC** | none | `footer` (`border-ink/10`, `bg-ink text-paper`), 3-col grid: journal blurb + The pair (BSC/OLL live links) + In this issue (Side by side/Findings/Method), `gold-hairline` + disclaimer `Scores are reasoned from source.` |
 | `ScoreBar.tsx` | **RSC** | `ScoreBarProps {label:string, bsc:number, oll:number, compact?:boolean}` | Visual comparison bar: two `1.5px` tracks (`bg-paper-deep`, `bg-bsc`/`bg-oll` at `score/10*100%`), leader `font-semibold text-bsc/oll`, `tabular-nums`. Used on `/` and `/compare`. |
-| `FindingsBoard.tsx` | **Client** (`'use client'`) | `FindingsBoardProps {findings: Finding[]}` | Filterable ledger: `SEVERITIES [all,high,medium,low,info]` + `SCOPES [all,bsc,oll,shared]` as `useState`, `filtered = useMemo(() => findings.filter(...), [findings,scope,severity])`, `ol` of cards (`bg-cream`, `border-ink/10`, `shadow-[…]`), badges via `severityClass()` + `siteLabel()` + `confidenceLabel()`, `dl` Evidence/Impact/Fix. Empty: `No findings in this cut.` |
+| `FindingsBoard.tsx` | **Client** (`'use client'`) | `FindingsBoardProps {findings: Finding[]}` | Filterable ledger: `SEVERITIES [all,high,medium,low,info]` + `SCOPES [all,bsc,oll,shared]` as `useState`, `filtered = useMemo(() => findings.filter(...), [findings,scope,severity])`, `ol` of cards (`bg-cream`, `border-ink/10`, `shadow-[…]`), badges via `severityClass()` + `siteLabel()` + `confidenceLabel()`, `dl` Evidence/Impact/Fix. Empty: `No findings in this cut.` Imports `type { Finding }` from `@/db/schema` (type-only, allowed — see §5.1). |
 | `CopySwatch.tsx` | **Client** (`'use client'`) | `CopySwatchProps {token:string, hex:string, usage:string}` | Token card: `button` (`bg=hex`, `color=contrastText(hex)`), `aspect-[5/3]` with token label, bottom strip `hex` + `usage`, `onCopy` via `navigator.clipboard.writeText(hex)` + `Copied` 1400ms. |
 | `ReviewForm.tsx` | **Client** (`'use client'`) | `ReviewFormProps {onSubmitted?: () => void}` | Submission form: `FormData` → `fetch POST /api/reviews` (`Content-Type: application/json`), `reviewerName` (required, `maxLength 80`), `preferredSite` radios (`bsc`/`oll`/`tie` required), `visualScore`/`uxScore`/`a11yScore` (`type number 1–10 default 8`), `comment` (`required minLength 12 maxLength 800 rows 4`), `status idle|saving|saved|error` + `message`, `disabled` during `saving`, `form.reset()` + `router.refresh()` on success. |
+
+**Client count:** 3 interactive islands + `src/app/error.tsx` (error boundary). Grep `'use client'` → 4 files, by design.
 
 **Client vs Server decision tree:**
 
@@ -323,7 +328,7 @@ No `useEffect` for data fetching — all pages are `async` RSC calling `getFullA
 | `/palettes` | `src/app/palettes/page.tsx` | `force-dynamic` | `getFullAudit()` → `sites` with `tokens` grouped by `groupName` | Header `Same gold. Different blues.`, `18 tokens` copy (see §4), per-site `section` (`tokenPrefix-*` + `theme-color` + 5 groups `Surface/Ink/Sapphire|Marian/Gold/Accent` with `CopySwatch` grid `2→3→6` cols). |
 | `/reviews` | `src/app/reviews/page.tsx` | `force-dynamic` | `getFullAudit()` → `reviews` | Two-col grid: form (`ReviewForm`) + board (`{n} logged`, empty dash `No visitor scores yet.` or `reviewerName` + `Prefers {Blessed Sacrament|OLL|Tie}` + `Visual · UX · A11y` + `comment`). |
 | `/method` | `src/app/method/page.tsx` | `force-dynamic` | **no DB** — imports `METHOD_NOTES` from `audit-data.ts` | Sources (live shells + repos + OLL audit extract), Scoring (10 equal-weighted, `Δ`, ties), What would raise confidence (headed browser pass: hover lift, drawer trap, Ken Burns under reduced-motion, quote card overlap). |
-| `/api/reviews` | `src/app/api/reviews/route.ts` | `force-dynamic` | `insertReview()` | `POST` — validates `name 2–80`, `preferredSite ∈ {bsc,oll,tie}`, `comment 12–800`, `scores ∈ 1–10 integer` → 400 `{error}`, or 201 `{ok:true, review}`, or 500. |
+| `/api/reviews` | `src/app/api/reviews/route.ts` | `force-dynamic` | `insertReview()` | `POST` — per-IP rate limit 5 req/min (`src/lib/server/rate-limit.ts`, in-memory) → 429 + `Retry-After`; validates `name 2–80`, `preferredSite ∈ {bsc,oll,tie}`, `comment 12–800`, `scores ∈ 1–10 integer` → 400 `{error}`, or 201 `{ok:true, review}`, or 500. |
 | `/api/health` | `src/app/api/health/route.ts` | `force-dynamic` | `db.execute(sql`select 1`)` | `GET` → `{ok:true}` 200 or `{ok:false}` 500 — the single DB smoke. |
 | `/api/audit` | `src/app/api/audit/route.ts` | `force-dynamic` | `getFullAudit()` | `GET` → `{ok:true, audit: FullAudit}` or `{ok:false, error}` 500. |
 | `/_not-found` | `src/app/not-found.tsx` | RSC (no `force-dynamic` needed) | none | `404 → Folio not found.` + `Back to verdict` / `Open findings`. |
@@ -363,7 +368,7 @@ Fonts are self-hosted at build time (no network at runtime).
 | Function | Signature | Purpose | Key Detail |
 |----------|-----------|---------|------------|
 | `formatScore(value:number)` | `(n) => n.toFixed(1)` | `8.67 → "8.7"` | Used in `page.tsx` composite + `compare/page.tsx` |
-| `severityClass(severity:string)` | `(s) => "bg-…/15 text-…"` | Badge color | `critical→bg-rose/15`, `high→bg-[#8f5038]/15`, `medium→bg-rule/15`, `low→bg-sage/15`, else `bg-ink/10` |
+| `severityClass(severity:string)` | `(s) => "bg-…/15 text-…"` | Badge color | `critical→bg-rose/15`, `high→bg-high-sev/15 text-high-sev`, `medium→bg-rule/15 text-gold-700`, `low→bg-sage/15`, else `bg-ink/10` — all `@theme` tokens (pinned by `format.test.ts` no-raw-hex test) |
 | `confidenceLabel(value:string)` | `(v) => "Verified in source" \| "Reasoned" \| "Assumed"` | Findings badge | `verified/ reasoned/ assumed` — matches `METHOD_NOTES.confidence` |
 | `siteLabel(slug:string\|null)` | `(s) => "BSC" \| "OLL" \| "Both"` | Scope badge | `null → Both` (shared finding) |
 | `contrastText(hex:string)` | `(hex) => "#16130e" \| "#f8f5ef"` | `CopySwatch` text color | YIQ `(r*299+g*587+b*114)/1000 >=160 → ink else paper` |
@@ -391,7 +396,7 @@ All content is **file-backed typed constants** in `src/lib/audit-data.ts` → **
 | `SITE_SEEDS` | **2** | `{slug:"bsc"\|"oll", name, shortName, url, repoUrl, tagline, headline, displayFont, bodyFont, themeColor, architecture, founded, address, version, heroImage, tokenPrefix, overallScore, verdict}` | `bsc 8.67 / oll 8.79`, `themeColor #0a1122/#0a1428`, `heroImage /images/bsc-tent.jpg` etc. |
 | `CRITERIA_SEEDS` | **10** | `{slug, name, description, sortOrder:1..10}` | `brand-fit, typography, colour, layout, components, motion, accessibility, ia, voice, craft` |
 | `SCORE_NOTES` | **10 keys** | `Record<slug, {bsc:{score,notes}, oll:{score,notes}}>` | Each `score` 8.3–9.2, `notes` is the rationale rendered on `/compare` in `bg-bsc/oll-deep` cards |
-| `FINDING_SEEDS` | **10** | `{siteSlug:null\|"bsc"\|"oll", severity:"high"\|"medium"\|"low"\|"info", title, description, evidence, impact, recommendation, confidence:"verified"\|"reasoned"\|"assumed", dimension}` | Distribution: `verified 6, reasoned 3, assumed 0` (assumed is valid but unused); severities: `high 1, medium 3, low 3, info 3` |
+| `FINDING_SEEDS` | **10** | `{siteSlug:null\|"bsc"\|"oll", severity:"high"\|"medium"\|"low"\|"info", title, description, evidence, impact, recommendation, confidence:"verified"\|"reasoned"\|"assumed", dimension}` | Distribution: `verified 7, reasoned 3, assumed 0` (assumed is valid but unused); severities: `high 1, medium 3, low 3, info 3` |
 | `PALETTE_SEEDS` | **36** (18/site) | `Record<"bsc"\|"oll", {token, hex, usage, groupName, sortOrder}[]>` | `bsc: cream→parchment→stone→ink→charcoal→sapphire-50→…→gold-700→pine/terracotta`; `oll: cream→…→blue-50→…→gold-700→rose/sage`; groups `Surface/Ink/Sapphire\|Marian/Gold/Accent` |
 
 **How to add a new finding:**
@@ -536,7 +541,7 @@ export async function insertReview(input:{reviewerName:string,preferredSite:stri
 
 **Symptom:** Bundle bloat, RSC streaming lost, `getFullAudit()` must move to `fetch` or Server Action.
 **Root cause:** Page treated as client component for a single interactive child.
-**Fix:** Keep pages RSC; extract interactivity to `FindingsBoard`/`CopySwatch`/`ReviewForm` (`'use client'`). Exactly 3 client components — grep `'use client'` before adding a fourth.
+**Fix:** Keep pages RSC; extract interactivity to `FindingsBoard`/`CopySwatch`/`ReviewForm` (`'use client'`). 3 interactive islands + `error.tsx` boundary — grep `'use client'` → 4 files, by design.
 
 ### AP-4 — Mutating `audit-data.ts` at Runtime (High)
 
@@ -611,6 +616,7 @@ export async function insertReview(input:{reviewerName:string,preferredSite:stri
 | `public/images/*.jpg` → 404 | `public/` not committed / file missing | `ls public/images/` → 4 JPEGs; `file public/images/*.jpg` → `JPEG …`; `curl -I /images/studio-hero.jpg` → `200 image/jpeg` | Same |
 | `/_next/static/css` missing `rise-in` | `globals.css` not rebuilt | `rm -rf .next` + `npx next dev --webpack` or `npm run build` → `grep rise-in .next/static/css` → hits | `curl -s /_next/static/css/app/layout.css | grep -c rise-in` → 7 |
 | `Failed to insert review` / `Unique violation` | Client double-submit or race | `ReviewForm` disables button while `saving`; `seedPromise` guards seeding race. If DB unique constraint hit (none currently on `audit_reviews`), add `ON CONFLICT DO NOTHING`. | Check `audit_reviews` has no unique constraint on `reviewerName` — duplicates allowed by design. |
+| `POST /api/reviews` → 429 `Too many reviews…` | Per-IP fixed-window rate limit (5 req/min, `src/lib/server/rate-limit.ts`) | Wait for the `Retry-After` window; the limiter is in-memory per server instance (no shared store). | `for i in 1..6; do curl -X POST /api/reviews …; done` → 6th returns 429 |
 
 **Live-site smoke (after `npx next dev --webpack` or `npm run build && npm start`):**
 
@@ -636,6 +642,9 @@ npm run typecheck            # tsc --noEmit — exit 0, no any
 # 2. Lint (project code — skills/ noise is expected)
 npm run lint                 # 0 errors (12 skills/ warnings ignored)
 
+# 2b. Tests (Vitest — 18 unit/component tests)
+npm test                     # format.ts, schema ≡ migration pin, rate limiter, regression guards
+
 # 3. DB schema is pushed (fresh or migrated)
 # Fresh:
 npx drizzle-kit push         # Changes applied
@@ -657,6 +666,11 @@ curl -s http://127.0.0.1:3000/this-does-not-exist | grep -q "Folio not found" &&
 # 6. API validation matrix (one of each)
 curl -s -X POST http://127.0.0.1:3000/api/reviews -H 'Content-Type: application/json' \
   -d '{"reviewerName":"Ship Check","preferredSite":"bsc","visualScore":9,"uxScore":8,"a11yScore":9,"comment":"Pre-ship smoke — scores and flows verified."}' | jq .ok # true
+
+# 7. Security headers present (audit M1)
+curl -s -I http://127.0.0.1:3000/ | grep -qi "x-frame-options: DENY" && echo "headers OK"
+curl -s -I http://127.0.0.1:3000/ | grep -qi "content-security-policy" && echo "CSP OK"
+
 curl -s http://127.0.0.1:3000/api/audit | jq '.audit | {sites: (.sites|length), criteria: (.criteria|length), findings: (.findings|length), reviews: (.reviews|length)}'
 # → {"sites":2,"criteria":10,"findings":10,"reviews":≥1}
 ```
@@ -665,7 +679,7 @@ curl -s http://127.0.0.1:3000/api/audit | jq '.audit | {sites: (.sites|length), 
 
 | Job | Command | Env |
 |-----|---------|-----|
-| `verify` on `push:main` + `pull_request:main` | `npm ci` → `npm run lint` → `npm run typecheck` → `npm run build` | `DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/app_db` (dummy for import) |
+| `verify` on `push:main` + `pull_request:main` | `npm ci` → `npm run lint` → `npm run typecheck` → `npm test` → `npm run build` | `DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/app_db` (dummy for import) |
 
 Build does not need a live DB; API smoke is manual (requires `docker compose up -d`).
 
@@ -727,6 +741,18 @@ Build does not need a live DB; API smoke is manual (requires `docker compose up 
 **Why it mattered:** Onboarding sees a blank 500 with no `docker compose up` hint.
 **How to avoid:** `src/app/error.tsx` now detects `DATABASE_URL|audit seed|seed` and shows the fix. Any new data page should rely on this boundary rather than swallowing the throw.
 
+### L-8 — The Deploy Workspace Is Not the Repo (C1, 2026-09-07)
+
+**What happened:** `src/db/index.ts` + `src/db/schema.ts` existed only in the deploy workspace — `git ls-tree` across every commit shows they were never committed. Fresh clone: `tsc` 21 errors, `next build` module-not-found, yet all docs claimed "CI green" because gates were run in the workspace that had the files.
+**Why it mattered:** the repository was un-buildable by anyone (or any CI) other than the deploy host; the journal's core data layer was one lost disk away from gone.
+**How to avoid:** run the full gate chain from a **fresh clone** (`git clone` → `npm ci` → `npm test` → `typecheck` → `lint` → `build`) before declaring done — never only in the long-lived workspace. `src/db/schema.test.ts` now pins the schema to the committed migration, and `npx drizzle-kit generate` must stay a no-op.
+
+### L-9 — Trust Byte-Level Inspection Over Rendered Output (audit lesson, 2026-09-07)
+
+**What happened:** three audit findings (CI `branches: ain]`, `.env.example` `ost`, `start_server.sh` ANSI) were display artifacts — the rg/cat output layer swallowed `[m`-style sequences. `od -c` + a file-content unit test proved the files were correct.
+**Why it mattered:** fixing them would have churned correct files; believing the first grep would have shipped wrong conclusions into the report.
+**How to avoid:** when terminal output disagrees with a reader tool, escalate to `od -c`, PyYAML/JSON parse, or a filesystem-scanning test before classifying a finding. Evidence or it didn't happen.
+
 ---
 
 ## 13. Pitfalls to Avoid
@@ -787,9 +813,13 @@ Build does not need a live DB; API smoke is manual (requires `docker compose up 
 ### 14.5 Security / Validation
 
 - **Zod not used** — validation is manual early-return in `src/app/api/reviews/route.ts`: `asString`/`asScore` + length/enum/integer checks → `400 {error:string}`. Input is `unknown` JSON, not a typed DTO.
+- **Rate limiting (audit M2)** — per-IP fixed-window limiter (5 req/min, bounded 1000-client map, in-memory per instance) gates `POST /api/reviews` before validation/DB. Over limit → `429` + `Retry-After`. Multi-instance serverless would need a shared store.
+- **Security headers (audit M1)** — `next.config.ts headers()`: X-Frame-Options DENY, nosniff, strict-origin-when-cross-origin, Permissions-Policy, baseline CSP with `frame-ancestors 'none'` (CSP keeps `'unsafe-inline'` for Next inline bootstrap; nonce CSP is future work).
 - **No auth** — reviews are anonymous-but-named (`reviewerName` 2–80 is the anti-dump).
 - **SQL:** Drizzle parameterized (`db.select`, `db.insert().values(...).returning()`).
+- **XSS:** stored payloads render escaped through React (live-verified with a probe; no `innerHTML`/`dangerouslySetInnerHTML`/`eval` in `src/`).
 - **Env:** `DATABASE_URL` required at import (`throw` if absent) — fail-fast.
+- **Dependency posture:** `npm audit fix` (2026-09-07) resolved next/postcss/sharp highs; residual 4 moderate = dev-only esbuild via drizzle-kit (breaking fix deferred, see audit doc I4).
 
 ### 14.6 Design
 
@@ -797,9 +827,11 @@ Build does not need a live DB; API smoke is manual (requires `docker compose up 
 - **Animation** — `transform`/`opacity` only; `prefers-reduced-motion` kill-switch is non-negotiable (see §8).
 - **Radii** — `rounded-[4px]` everywhere; editorial `2–6px` lineage from upstream but journal locks to `4px`.
 
-### 14.7 Testing (prescribed, not yet landed)
+### 14.7 Testing (landed 2026-09-07)
 
-- No test runner yet — when added: **Vitest + RTL** (unit/component) + **Playwright** (E2E), co-located `*.test.tsx` next to component, `src/app/api/**/*.test.ts` for routes (mock Drizzle vs `testcontainers` for integration).
+- **Vitest + RTL** configured (`vitest.config.ts`, jsdom, `@` alias). `npm test` = one-shot `vitest run` (18 tests); `npm run test:watch` for watch mode. CI runs it.
+- Co-located suites: `src/lib/format.test.ts` (formatters + no-raw-hex token rule), `src/db/schema.test.ts` (6 tables ≡ `drizzle/0000_wise_gateway.sql` — a drift here means `drizzle-kit generate` would emit a migration), `src/lib/server/rate-limit.test.ts` (allow/block/window/bounded map), `src/regression/docs-drift.test.ts` (retired `maison_dev` identifier guard).
+- E2E: manual agent-browser pass against the live site is documented in `docs/CODE_AUDIT_2026-09-07.md` (filters, clipboard, review submit 201 + persistence, validation matrix, XSS escaping, mobile 375px, skip link, reduced-motion). A Playwright harness remains optional future work — co-locate specs under `e2e/` when added.
 
 ---
 
@@ -1049,7 +1081,7 @@ Tailwind **defaults** (no custom config) — `src/app/globals.css` has no `@cust
 
 ## 19. Color Reference (Complete)
 
-> **Single source:** `src/app/globals.css @theme` (14 tokens + shadow) + `src/lib/audit-data.ts PALETTE_SEEDS` (36 tokens). Every hex below was grepped, not remembered.
+> **Single source:** `src/app/globals.css @theme` (16 color primitives + shadow) + `src/lib/audit-data.ts PALETTE_SEEDS` (36 tokens). Every hex below was grepped, not remembered.
 
 ### 19.1 Primitive Tokens — `@theme`
 
@@ -1068,6 +1100,8 @@ Tailwind **defaults** (no custom config) — `src/app/globals.css` has no `@cust
 | `--color-rose` | `#8a4a5f` | `138,74,95` | `bg-rose`, `text-rose` | OLL Mystical Rose (`severityClass` `critical` fallback) |
 | `--color-sage` | `#2f4f37` | `47,79,55` | `bg-sage`, `text-sage` | OLL formation, `low` severity, `ReviewForm` success |
 | `--color-cream` | `#f8f5ef` | `248,245,239` | `bg-cream` | Card fills (`aside` composite, findings cards, reviews) |
+| `--color-high-sev` | `#8f5038` | `143,80,56` | `bg-high-sev/15`, `text-high-sev` | High-severity badge (audit M4 — was raw hex in `format.ts`) |
+| `--color-gold-700` | `#85641c` | `133,100,28` | `text-gold-700` | Medium-severity badge text = `bsc-gold-700` value (audit M4) |
 | `--shadow-journal` | `0 24px 80px -28px rgba(22,19,14,0.35)` | — | `shadow-[0_12px_40px_-24px_…]` variant | FindingsBoard card `shadow-[0_12px_40px_-24px_rgba(22,19,14,0.35)]` (scaled down) |
 
 **Shared-gold invariant:** `--color-rule` `#b8943e` and `--color-rule-soft` `#d4ad42` are the *same* on both sites — the `bsc-gold-400` and `oll-gold-400` palette entries both point to `#d4ad42` (see 19.2). Do not uniquify.
@@ -1122,9 +1156,9 @@ Tailwind **defaults** (no custom config) — `src/app/globals.css` has no `@cust
 
 **Opacity variants (common):** `bg-bsc/15`, `bg-oll/15`, `bg-rule/15`, `bg-ink/10`, `bg-ink/15`, `border-ink/10`, `border-ink/15`, `text-paper/70`, `text-paper/80`, `text-ink/40`, `bg-paper/90` (backdrop-blur), `bg-cream/90` (IA bands), `bg-ink/40`→`ink/70`→`ink` (hero scrim).
 
-**Forbidden (enforced by review, not by test yet):** `amber-400`, `amber-500`, `purple-500`, any `bg-[#…]` hardcoded hex — grep `bg-\[|text-\[|border-\[` for colors before ship (type `text-[0.62rem]` is exempt).
+**Forbidden (enforced by review + `format.test.ts` no-raw-hex test):** `amber-400`, `amber-500`, `purple-500`, any `bg-[#…]` hardcoded hex — grep `bg-\[|text-\[|border-\[` for colors before ship (type `text-[0.62rem]` is exempt).
 
-**The singular exception:** None — no page uses a color outside this table.
+**The singular exception:** None — as of the 2026-09-07 remediation (audit M4), `format.ts` severity badges use `@theme` tokens (`bg-high-sev/15 text-high-sev`, `text-gold-700`); the last raw hexes are gone.
 
 ---
 
@@ -1300,6 +1334,7 @@ export function contrastText(hex: string): string; // YIQ ≥160 → #16130e els
 | `npm install` | ~18s | `npm install` | `package-lock.json` present; no `pnpm`. |
 | `typecheck` | ~4.2s | `npm run typecheck` (`tsc --noEmit`) | Also runs inside `next build`. |
 | `lint` | ~1s | `npm run lint` (`eslint .`) | 12 `skills/` warnings ignored; 0 project errors. |
+| `npm test` | ~3s | `vitest run` | 18 unit/component tests; no DB needed (schema pin is static). |
 | `next build` | ~7.9s + 4.7s typecheck | `npm run build` | Turbopack; `ƒ` dynamic, no DB needed. With dummy `DATABASE_URL` for import guard. |
 | `drizzle-kit push` (fresh) | ~2s | `npx drizzle-kit push` | Creates 6 tables; idempotent re-run → `Changes applied` (no-op if schema unchanged). |
 | `ensureSeeded()` (first request) | ~40–60ms | `GET /` or `GET /api/audit` after fresh `TRUNCATE` | Inserts 2 sites + 10 criteria + 20 scores + 10 findings + 36 tokens = 78 rows. |
@@ -1316,13 +1351,16 @@ export function contrastText(hex: string): string; // YIQ ≥160 → #16130e els
 | **Audit v1** | 2026-09-06 | 10 findings ledger created (SISTER_SITES, BSC Sacraments, OLL Serve, SPA shell, terracotta/pine editorial, Gothic geometry, shared gold, a11y floor, younger harness, quote card). 10 criteria scored 0–10 per site. | `src/lib/audit-data.ts` authored as source of truth. | 0 (Known Gap) |
 | ** Validation** | 2026-09-07 | 12 drifts detected: 33→18 tokens, phantom motion, `maison`→`nave` cred, missing `public/images`, stale build-requires-DB docs, Turbopack dev panic, arbitrary-color rule, drawer trap scope, `.env.example` missing, `error.tsx` absent, palette `@theme` scale, shared-gold invariant. | `VALIDATION_REPORT.md` 200 lines. | `typecheck` 0, `lint` 0 errors, `build` ✓ |
 | ** Polish P0/P1** | 2026-09-07 | — | 12 files: `public/images` 4 JPEG placeholders (sharp), `.env.example`, `.env.local`+`drizzle.config`→`nave_spire_dev`, `globals.css` 6 motion utilities + 5 keyframes, `palettes/page.tsx` 33→18, `error.tsx` (DB-aware) + `not-found.tsx`, `.github/workflows/ci.yml`, `AGENTS.md`/`CLAUDE.md`/`README.md` all corrected. | `typecheck` 0, `lint` 0, `build` 7.9s, `next dev --webpack` 200 on all 6 pages |
-| ** Live DB init** | 2026-09-07 | Docker `nave_spire_postgres` healthy, `push` 6 tables, `getFullAudit` seed 2/10/20/10/36 → 3 reviews persisted, API 400 matrix verified, 6 pages 200, 4 images 200, CSS motion hits verified. | `.env.*` + `drizzle.config` aligned to `nave_spire_dev`; `VALIDATION_REPORT.md` → 430 lines. | Live: `GET /api/health` 200, `POST /api/reviews` 201×3, `psql count(*)=3` |
+| ** Live DB init** | 2026-09-07 | Docker `nave_spire_postgres` healthy, `push` 6 tables, `getFullAudit` seed 2/10/20/10/36 → 3 reviews persisted **(local dev DB — the live prod DB was at 0 reviews until the 2026-09-07 E2E pass wrote 2 smoke rows)**, API 400 matrix verified, 6 pages 200, 4 images 200, CSS motion hits verified. | `.env.*` + `drizzle.config` aligned to `nave_spire_dev`; `VALIDATION_REPORT.md` → 430 lines. | Live: `GET /api/health` 200, `POST /api/reviews` 201×3, `psql count(*)=3` |
+| **Tiered audit + remediation** | 2026-09-07 | Deep audit (`skills/code-review-and-audit` + native fallbacks) + live browser E2E. Findings: C1 `src/db/` never committed (build/typecheck broken on fresh clone), C3 `error.tsx` still said `maison_dev`, H2 3 high npm vulns, M1 no security headers, M2 no rate limiting, M3 envelope doc drift, M4 raw-hex severity colors, M5 no tests; 3 false positives retracted after `od` byte inspection (C2/L4/L5). | Reconstructed `src/db/{index,schema}.ts` (drizzle-kit generate → no-op = byte-compatible); fixed error hint; `npm audit fix` (next 16.3.4, postcss 8.5.28, sharp 0.35.4); `next.config.ts` security headers; per-IP rate limiter + 429; `@theme` severity tokens; Vitest suite (18 tests); docs realigned (AGENTS/CLAUDE/README/SKILL v1.1.0). Evidence: `docs/CODE_AUDIT_2026-09-07.md`. | `npm test` 18/18, `typecheck` 0, `lint` 0 errors, `build` ✓, headers + 429 verified on local prod server |
 
 ---
 
 ## Appendix D: Live-Site Validation
 
 > **What CI cannot catch:** `prefers-reduced-motion`, hover lift, drawer trap, Ken Burns under reduced-motion, quote-card overlap on deployed hosts, and real parish photography (placeholders are now committed).
+>
+> **Status update 2026-09-07:** a headed browser pass over the **live journal** (`https://nave-spire.jesspete.shop/`) was executed with agent-browser — pages/404/images smoke, findings filters, palette clipboard, review submit (201 + persisted), API validation matrix (6/6 → 400), stored-XSS escaping, mobile 375px (no overflow, mobile nav), skip link, reduced-motion emulation. Results in `docs/CODE_AUDIT_2026-09-07.md`. The journal itself is now browser-verified; the *upstream parish SPAs* remain un-painted (source-over-screenshot still applies to their scores).
 
 ### D.1 Smoke Script (copy-pasteable)
 
@@ -1381,12 +1419,14 @@ Currently `METHOD_NOTES.confidence` says: "A headed browser pass over the runnin
 | **Env** | `.env.example` (template) → `.env.local` (active), `drizzle.config.json` (must match `docker-compose.yml`) |
 | **DB** | `sudo docker compose up -d` (`nave_spire_postgres`, `nave_spire_dev`) |
 | **Schema push** | `npx drizzle-kit push` (fresh) or `generate`+`migrate` (incremental) |
-| **Quality** | `npm run typecheck` → `npm run lint` → `npm run build` (or `.github/workflows/ci.yml`) |
+| **Quality** | `npm run typecheck` → `npm run lint` → `npm test` → `npm run build` (or `.github/workflows/ci.yml`) |
+| **Tests** | `src/lib/format.test.ts`, `src/db/schema.test.ts`, `src/lib/server/rate-limit.test.ts`, `src/regression/docs-drift.test.ts` (18 via `vitest run`) |
+| **Security** | `next.config.ts` headers() (XFO/nosniff/CSP), `src/lib/server/rate-limit.ts` (5 req/min/IP on POST /api/reviews) |
 | **Smoke** | `GET /api/health` → `GET /api/audit` → `for p in /*; curl $p` → `POST /api/reviews` → `psql count(*)` (see §11) |
-| **Docs** | `AGENTS.md` (compact), `CLAUDE.md` (standards), `README.md` (onboarding), `VALIDATION_REPORT.md` (430 lines) |
-| **Skill** | This file — `nave-spire_SKILL.md` v1.0.0 |
+| **Docs** | `AGENTS.md` (compact), `CLAUDE.md` (standards), `README.md` (onboarding), `VALIDATION_REPORT.md` (430 lines), `docs/CODE_AUDIT_2026-09-07.md` (tiered audit + E2E evidence) |
+| **Skill** | This file — `nave-spire_SKILL.md` v1.1.0 |
 
 ---
 
-*End of skill — v1.0.0 · 2026-09-07 · All claims verified against the live codebase (typecheck 0, lint 0 errors, build 7.9s, DB nave_spire_dev healthy, 3 reviews persisted, 6 pages 200, 4 images 200). When extending, respect §1's five non-negotiables — especially source-over-screenshot and shared-gold. For drift detection, run the smoke in Appendix D and compare against §19 hexes and §20 interfaces.*
+*End of skill — v1.1.0 · 2026-09-07 · All claims verified against the live codebase (npm test 18/18, typecheck 0, lint 0 errors, build ✓, security headers + 429 verified on local prod server, live browser E2E pass on https://nave-spire.jesspete.shop/ — see docs/CODE_AUDIT_2026-09-07.md). When extending, respect §1's five non-negotiables — especially source-over-screenshot and shared-gold. For drift detection, run the smoke in Appendix D and compare against §19 hexes and §20 interfaces.*
 

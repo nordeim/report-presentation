@@ -78,7 +78,7 @@ Follow this six-phase workflow for all implementation tasks:
 
 - Design tokens defined in `src/app/globals.css` `@theme` block:
   - Fonts: `--font-display`, `--font-body`, `--font-sans`, `--font-fraunces`, `--font-cormorant`, `--font-source`
-  - Colors (primitives): `--color-ink`/`--color-ink-soft`, `--color-paper`/`--color-paper-deep`, `--color-rule`/`--color-rule-soft` (gold `#b8943e`/`#d4ad42`), `--color-bsc`/`--color-bsc-deep`, `--color-oll`/`--color-oll-deep`, `--color-rose`, `--color-sage`, `--color-cream` — full tints (sapphire-300 etc.) live as data in `audit-data.ts` (18 tokens/site, not 33)
+  - Colors (primitives): `--color-ink`/`--color-ink-soft`, `--color-paper`/`--color-paper-deep`, `--color-rule`/`--color-rule-soft` (gold `#b8943e`/`#d4ad42`), `--color-bsc`/`--color-bsc-deep`, `--color-oll`/`--color-oll-deep`, `--color-rose`, `--color-sage`, `--color-cream`, `--color-high-sev` (`#8f5038`, high-severity badge), `--color-gold-700` (`#85641c`) — full tints (sapphire-300 etc.) live as data in `audit-data.ts` (18 tokens/site, not 33)
   - Shadow: `--shadow-journal`
 - No arbitrary **colors** outside `@theme` — extend `@theme` for colors/spacing/shadows. Editorial type scale (`text-[0.62rem]`, `tracking-[0.16em]`) is intentional and exempt.
 - Custom utilities: `.font-display`, `.font-sans`, `.font-fraunces`, `.font-cormorant`, `.font-source`, `.bg-grain`, `.gold-hairline`, `.weave`, plus motion system (`.rise-in`/`.d1`–`.d4`, `.hero-ken-burns`, `.bloom-drift`, `.card-lift`, `.gold-rule`, `.drawer-in` — all transform/opacity only)
@@ -135,6 +135,7 @@ npm run dev
 | `npm run start` | Start production server |
 | `npm run lint` | ESLint 9 (flat config, Next.js core-web-vitals) |
 | `npm run typecheck` | `tsc --noEmit` strict type check |
+| `npm test` / `npm run test:watch` | Vitest suite (18 tests) / watch mode |
 
 ### Database Commands
 
@@ -154,23 +155,23 @@ npx drizzle-kit push
 
 ## Testing Strategy
 
-**Current state**: No test suite configured. This is a known gap.
+**Current state**: Vitest + React Testing Library landed (2026-09-07). `npm test` → `vitest run` (18 tests green); `npm run test:watch` for watch mode. Browser E2E was executed manually via agent-browser against the live site (see `docs/CODE_AUDIT_2026-09-07.md`); Playwright harness remains optional future work.
 
-### Recommended Test Pyramid (when added)
+### Test Pyramid (as shipped)
 
-| Layer | Tool | Scope |
-|-------|------|-------|
-| Unit | Vitest | Pure functions in `src/lib/format.ts`, `src/lib/queries.ts` |
-| Component | React Testing Library + Vitest | Client components: `FindingsBoard`, `CopySwatch`, `ReviewForm`, `ScoreBar` |
-| Integration | Vitest + testcontainers | API routes (`/api/reviews`, `/api/audit`) with test DB |
-| E2E | Playwright | Critical journeys: home → compare → findings → submit review |
+| Layer | Tool | Scope | Files |
+|-------|------|-------|-------|
+| Unit | Vitest | Pure functions in `src/lib/format.ts` (incl. no-raw-hex token rule) | `src/lib/format.test.ts` |
+| Schema pin | Vitest | 6 tables ≡ committed migration `drizzle/0000_wise_gateway.sql` | `src/db/schema.test.ts` |
+| Unit | Vitest | Per-IP rate limiter (allow/block/window/bounded map) | `src/lib/server/rate-limit.test.ts` |
+| Regression | Vitest (node:fs scan) | Retired identifiers never reappear (`maison_dev`) | `src/regression/docs-drift.test.ts` |
+| E2E | Manual (agent-browser) / future Playwright | Live journeys: pages, filters, clipboard, review submit, validation matrix, a11y floor | `docs/CODE_AUDIT_2026-09-07.md` |
 
-### Test Conventions (to establish)
+### Test Conventions
 
-- Test files co-located: `Component.test.tsx` next to `Component.tsx`
-- API route tests in `src/app/api/**/*.test.ts`
-- Mock Drizzle `db` for unit tests; use testcontainers Postgres for integration
-- Run `npm test` before commits (add to pre-commit when tests exist)
+- Test files co-located: `Component.test.tsx` / `module.test.ts` next to the code
+- New logic ships with tests (red → green → refactor); bug fixes need a failing test first
+- Run `npm test` before commits (CI runs it: `.github/workflows/ci.yml` → `npm test`)
 
 ## Code Quality Standards
 
@@ -251,12 +252,14 @@ npm run typecheck
 ```
 src/
 ├── app/                    # Next.js App Router
-│   ├── api/                # Route handlers (POST /reviews, GET /health, GET /audit)
+│   ├── api/                # Route handlers (POST /reviews rate-limited, GET /health, GET /audit)
 │   ├── compare/            # Side-by-side comparison page
 │   ├── findings/           # Filterable findings board
 │   ├── palettes/           # Token swatches with copy-to-clipboard
 │   ├── reviews/            # Visitor scoreboard + submission form
 │   ├── method/             # Methodology & sources
+│   ├── error.tsx           # 'use client' error boundary, DB-aware (nave_spire_dev hint)
+│   ├── not-found.tsx       # 404 Folio not found
 │   ├── globals.css         # Tailwind v4 @theme + global styles
 │   ├── layout.tsx          # Root layout, fonts, Masthead, StudioFooter
 │   └── page.tsx            # Home: hero, verdict, score bars, IA, type, findings preview
@@ -268,29 +271,40 @@ src/
 │   ├── CopySwatch.tsx      # Color token card with clipboard ('use client')
 │   └── ReviewForm.tsx      # Review submission form ('use client')
 ├── db/                     # Drizzle ORM
-│   ├── index.ts            # Pool singleton + db instance
-│   └── schema.ts           # Tables + inferred types
-└── lib/                    # Business logic
-    ├── queries.ts          # DB queries (getFullAudit, insertReview)
-    ├── seed.ts             # Idempotent seeding (ensureSeeded)
-    ├── format.ts           # Pure formatters (score, severity, contrast)
-    └── audit-data.ts       # All seed constants: sites, criteria, scores, findings, palettes
+│   ├── index.ts            # Pool singleton (globalThis) + db instance
+│   ├── schema.ts           # Tables + inferred types
+│   └── schema.test.ts      # Schema ≡ committed migration pin
+├── lib/                    # Business logic
+│   ├── queries.ts          # DB queries (getFullAudit, insertReview)
+│   ├── seed.ts             # Idempotent seeding (ensureSeeded)
+│   ├── format.ts           # Pure formatters (score, severity, contrast)
+│   ├── format.test.ts      # Unit tests (incl. no-raw-hex token rule)
+│   ├── server/rate-limit.ts + .test.ts  # Per-IP fixed-window limiter
+│   └── audit-data.ts       # All seed constants: sites, criteria, scores, findings, palettes
+├── regression/
+│   └── docs-drift.test.ts  # Retired-identifier scan (maison_dev guard)
+└── scripts/seed.ts         # Standalone seeder for db:seed / db:setup
 ```
 
 ### API Design
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/api/reviews` | POST | Submit visitor review (validated: name, site, 3 scores 1–10, comment) |
+| `/api/reviews` | POST | Submit visitor review (validated: name, site, 3 scores 1–10, comment) — per-IP rate limit 5 req/min → `429` + `Retry-After` |
 | `/api/health` | GET | DB connectivity check (`select 1`) |
 | `/api/audit` | GET | Full audit JSON (sites, criteria, scores, findings, tokens, reviews) |
 
-**Response Format**:
+**Response Format (as implemented)**:
 ```typescript
-// Success
-{ ok: true, data: T }
-// Error
-{ ok: false, error: string }
+// Success — payload key names the resource
+{ ok: true, audit: FullAudit }   // GET /api/audit
+{ ok: true, review: Review }     // POST /api/reviews (201)
+{ ok: true }                     // GET /api/health
+// Errors
+{ error: string }                // 400 validation (reviews)
+{ ok: false, error: string }     // 500 (audit)
+{ ok: false }                    // 500 (health)
+{ error: string } + Retry-After  // 429 rate limited (reviews)
 ```
 
 ### Database Schema
@@ -352,10 +366,12 @@ Utilities — all `transform`/`opacity` only for reduced-motion compliance (gate
 
 You are successful when:
 - Audit data renders correctly across all pages (home, compare, findings, palettes, reviews, method) — requires reachable `DATABASE_URL` at **runtime** (build itself does NOT need DB; `force-dynamic` skips `getFullAudit()` at build)
-- Visitor reviews persist to PostgreSQL and appear on `/reviews` after `router.refresh()`
+- Visitor reviews persist to PostgreSQL and appear on `/reviews` after `router.refresh()` — and spam is throttled (429 after 5 req/min/IP)
 - TypeScript strict check passes (`npm run typecheck`)
 - ESLint passes (`npm run lint`)
+- Test suite passes (`npm test` — 18 tests)
 - Build succeeds (`npm run build` — succeeds even without DB)
+- Security headers present on every response (X-Frame-Options, nosniff, CSP `frame-ancestors 'none'`)
 - Accessibility contracts hold: skip link works, focus rings visible, reduced-motion kills all animation; drawer trap / Escape applies to upstream parish drawer (journal `Masthead` is currently static)
 
 ## System Integration
@@ -372,25 +388,28 @@ You are successful when:
 
 ## Anti-Patterns to Avoid
 
-- **Don't add tests without a test runner configured** — establish Vitest + Playwright first
+- **Don't skip tests** — Vitest is configured (`npm test`); new logic ships with co-located tests, bug fixes need a failing test first
 - **Don't use `any`** — the codebase compiles with `strict: true`; keep it that way
 - **Don't bypass `ensureSeeded()`** — all queries call it; direct DB access without seeding will fail on fresh DB
-- **Don't hardcode colors in components** — use Tailwind classes from `@theme` (`bg-bsc`, `text-oll`, `border-rule`); editorial `text-[0.62rem]` is the one allowed arbitrary
-- **Don't add `'use client'` unnecessarily** — Server Components are default; only client for interactivity
+- **Don't hardcode colors in components** — use Tailwind classes from `@theme` (`bg-bsc`, `text-oll`, `border-rule`); editorial `text-[0.62rem]` is the one allowed arbitrary. Severity badge colors are tokens too (`bg-high-sev/15 text-high-sev`, `text-gold-700`)
+- **Don't add `'use client'` unnecessarily** — Server Components are default; only client for interactivity (plus `error.tsx`)
 - **Don't mutate seed data at runtime** — `audit-data.ts` is the source of truth; DB is seeded once from it
 - **Don't skip accessibility** — the gold focus ring, skip link, and reduced-motion gate are non-negotiable; drawer trap when you add a drawer
 - **Don't assume live SPA paint matches source** — the Method page explicitly documents this limitation
+- **Don't remove security headers or the review rate limiter** — `next.config.ts` headers() and `src/lib/server/rate-limit.ts` are audit remediations (docs/CODE_AUDIT_2026-09-07.md M1/M2)
 
 ## Continuous Improvement
 
 ### Known Gaps (tracked for future work)
 
-1. **No test suite** — Add Vitest + React Testing Library + Playwright
+1. ~~**No test suite**~~ — Vitest + RTL landed 2026-09-07 (18 tests). Remaining: Playwright E2E harness + API-route integration tests with testcontainers
 2. ~~**No `error.tsx` / `not-found.tsx`** — Added in polish pass (`src/app/error.tsx` is DB-aware)~~
-3. **No pre-commit hooks** — Add Husky + lint-staged when tests exist
-4. **No CI/CD pipeline** — Add GitHub Actions for lint, typecheck, build, test (`.github/workflows/ci.yml` now covers lint+typecheck+build)
+3. **No pre-commit hooks** — Add Husky + lint-staged (CI covers lint+typecheck+test+build on push/PR to main)
+4. ~~**No CI/CD pipeline** — `.github/workflows/ci.yml` covers lint+typecheck+test+build~~
 5. **Image optimization** — Hero images are local `/public/images/*.jpg`; consider next/image remote patterns if migrating to CMS
 6. **Analytics/telemetry** — None currently; consider Vercel Analytics or Plausible if needed
+7. **Strict CSP nonce** — Current CSP uses `'unsafe-inline'` (Next inline bootstrap); move to nonce-based CSP via middleware
+8. **Shared-store rate limiting** — The per-IP limiter is in-memory per instance; move to Redis/edge store for serverless multi-instance
 
 ### When Extending
 
