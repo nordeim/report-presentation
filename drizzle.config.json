@@ -2,6 +2,6 @@
   "dialect": "postgresql",
   "schema": "./src/db/schema.ts",
   "dbCredentials": {
-    "url": "postgresql://maison:maison_local_dev@127.0.0.1:5432/maison_dev"
+    "url": "postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev"
   }
 }

@@ -380,3 +380,51 @@ rg "18 tokens" src/app/palettes/page.tsx → 1 hit
 - Drawer focus trap / Escape / single-open accordion for the journal `Masthead` remains aspirational — current `Masthead` is correctly static; removing or implementing the drawer is a product decision, not a drift.
 
 
+
+---
+
+## Post-Polish DB Initialization & Live Test — 2026-09-07
+
+**Docker:** `nave_spire_postgres` (postgres:17-alpine) `Up (healthy)` on `0.0.0.0:5432`
+`POSTGRES_DB=nave_spire_dev` / `nave_spire_user:nave_spire_secret` — aligned to `.env.local`, `.env.example`, `drizzle.config.json` (all `nave_spire_dev`).
+
+**Schema init:**
+- `npx drizzle-kit push` → `Changes applied` → 6 tables: `audit_sites`, `audit_criteria`, `audit_scores`, `audit_findings`, `audit_palette_tokens`, `audit_reviews` (verified via `psql \d audit_sites`)
+- Extensions: `pgcrypto`, `pg_trgm` present.
+
+**Auto-seed (via `getFullAudit` / `ensureSeeded`):**
+- First call: 2 sites (bsc 8.67 / oll 8.79), 10 criteria, 20 scores, 10 findings, 36 tokens (18/site), 0 reviews → idempotent second call OK.
+- Health: `db.execute(sql`select 1`)` → `[{ok:1}]`.
+
+**Quality gates (with live DB):**
+- `npm run typecheck` → exit 0
+- `npm run lint` → 0 errors, 12 skills/ warnings
+- `npm run build` → ✓ 8.3s, all routes `ƒ` dynamic, `○ /_not-found` static
+
+**API live tests (port 3000, webpack dev — Turbopack dev has a known Tailwind v4 panic, see note):**
+- `GET /api/health` → `{ok:true}` 200
+- `GET /api/audit` → `ok:true`, 2 sites (10 scores each, 18 tokens each), 10 criteria, 10 findings, 0→3 reviews after posts
+- `POST /api/reviews` validation → 400 for: name <2 or >80, comment <12 or >800, `preferredSite` not in `{bsc,oll,tie}`, scores not 1–10 integer
+- `POST /api/reviews` valid → 201 `{ok:true, review}` — tested 3 inserts: `Pete Tester (bsc 9/8/10)`, `Second Reader (tie 8/9/9)`, `Audit Bot (oll 9/9/8)` — all persisted (`select count(*) = 3`).
+
+**Page rendering (webpack dev, Turbopack dev panics — see below):**
+- `/` → 200, `id="main"` present, hero images `/images/studio-hero.jpg` etc. HIT
+- `/compare` → 200, deltas `Δ` + both parishes
+- `/findings` → 200, severity groups `high/medium/low/info`
+- `/palettes` → 200, `18 tokens` copy corrected, groups Surface/Ink/Sapphire/Marian/Gold/Accent
+- `/reviews` → 200, form + 3 persisted reviews visible
+- `/method` → 200
+- `/this-does-not-exist` → 404 `Folio not found.` (not-found.tsx)
+- `/images/*.jpg` → 200 `image/jpeg` (20–23KB each) — placeholders now serve
+
+**CSS delivery:**
+- `/_next/static/css/app/layout.css` → contains `.rise-in` (7 hits), `.hero-ken-burns` (3), `.bloom-drift` (3), `.card-lift` (2), `focus-visible` (23), `prefers-reduced-motion` (2) — motion system now real.
+
+**Known Turbopack dev issue:**
+- `next dev` (Turbopack, default in Next 16) panics on `globals.css` with `FileSystemPath("").join("../mattpocok-skills/...") leaves the filesystem root` — reproducible only in dev/Turbopack, not in `next build` (Turbopack build succeeds). Workaround: `next dev --webpack` passes all pages. Root cause is Tailwind v4 content scanning / Turbopack file-system root handling when `../mattpocok-skills` is a sibling to the project root in the host filesystem layout. Not a code bug — track upstream; CI uses `next build` (unaffected). Recommended: keep `next dev --webpack` for local dev until Turbopack fix, or add explicit `content` globs in Tailwind config to constrain scan.
+
+**Next steps:**
+- Replace the 4 placeholder JPEGs with real parish photography; no code change.
+- Add Vitest + Playwright when test coverage is desired (still the sole Known Gap).
+- Optionally pin `dev` script to webpack: `"dev": "next dev --webpack"` until Turbopack panic is upstream-fixed.
+
