@@ -18,6 +18,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm test
       # Build does NOT require DATABASE_URL (force-dynamic skips DB at build).
       # Set a dummy URL so drizzle import doesn't throw at build-time evaluation
       # of src/db/index.ts (which throws if DATABASE_URL is absent).
