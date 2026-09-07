@@ -42,7 +42,9 @@ ssh-key*
 docs/ssh-key.txt
 
 # environment scaffolding & runtime artifacts
-db/
+# (anchored to repo root — an unanchored `db/` also matched `src/db/`,
+#  which silently excluded the DB layer from every commit: audit C1)
+/db/
 dev.log
 tool-results/
 server.log
