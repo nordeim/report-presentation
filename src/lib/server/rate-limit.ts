@@ -1,9 +1,13 @@
 /**
  * Minimal fixed-window rate limiter for the unauthenticated POST /api/reviews
  * endpoint (audit finding M2). In-memory by design: each server instance
- * tracks its own clients, which is adequate for the single-node deployment
- * this journal ships on. Serverless multi-instance deployments would need a
- * shared store (e.g. Redis) — documented in README "API Reference".
+ * tracks its own clients, so enforcement is per-instance and therefore
+ * BEST-EFFORT ACROSS INSTANCES — live-verified 2026-09-08 that the deployed
+ * host answers from more than one instance (or recycles them), meaning a clean
+ * 6-request burst may not deterministically 429 (see
+ * docs/CODE_AUDIT_2026-09-08.md M-A). A deterministic global limit needs a
+ * shared store (e.g. Redis) — documented as future work in README "API
+ * Reference" and CLAUDE.md Known Gap #8.
  *
  * The client map is bounded (maxClients, oldest-evicted) so unbounded
  * spoofed-IP traffic cannot exhaust memory.
