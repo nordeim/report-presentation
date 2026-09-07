@@ -6,9 +6,9 @@ description: >
   across 10 evidence-backed criteria. Covers the editorial @theme design system, RSC + force-dynamic
   + ensureSeeded() data contract, 6-table Drizzle schema, 18-token palettes, motion system,
   a11y floor, API validation, DB lifecycle, and every hard-won lesson from the audit → polish → live-DB verification.
-version: 1.2.0
-last_updated: 2026-09-07
-project_state: 6 components (3 client + error boundary), 6 tables, 10 criteria, 36 palette tokens, 10 findings, 24 vitest tests green, security headers + review rate limiter shipped, CI lint+typecheck+test+build green
+version: 1.3.0
+last_updated: 2026-09-08
+project_state: 6 components (3 client + error boundary), 6 tables, 10 criteria, 36 palette tokens, 10 findings, 29 vitest tests green, security headers + poweredByHeader:false + review rate limiter (per-instance best-effort) shipped, CI lint+typecheck+test+build green
 tags:
   - nextjs-16
   - react-19
@@ -91,13 +91,13 @@ tags:
 | Framework | Next.js (App Router, `force-dynamic`) | `16.3.4` | `package.json: next` (lockfile; range `^16.2.6`, bumped via `npm audit fix`) | Turbopack default in 16; `proxy.ts` does not exist — no middleware. `next build` uses Turbopack and succeeds without DB; `next dev` with Turbopack has a known panic (see §10). `next.config.ts` emits security headers (see §14.5). |
 | UI Runtime | React / React-DOM | `19.2.6` | `package.json` | RSC by default; `'use client'` only for 3 components. |
 | Language | TypeScript (strict) | `5.9.3` | `package.json` + `tsconfig.json` | `strict:true`, `noEmit:true`, `isolatedModules:true`, `moduleResolution:bundler`, `jsx:react-jsx`, `target:ES2017`, `baseUrl:.`, `paths:@/*→./src/*`, `exclude:[skills]`. Never `any`. |
-| Styling | Tailwind CSS (CSS-first `@theme`) | `4.1.17` + `@tailwindcss/postcss@4.1.17`, `postcss@8.5.8` | `package.json` + `postcss.config.mjs` | **No `tailwind.config.ts`** — all tokens in `src/app/globals.css @theme`. |
+| Styling | Tailwind CSS (CSS-first `@theme`) | `4.3.3` + `@tailwindcss/postcss@4.1.17`, `postcss@8.5.28` | `package.json` + `postcss.config.mjs` | **No `tailwind.config.ts`** — all tokens in `src/app/globals.css @theme`. |
 | DB Driver | `pg` / `@types/pg` | `8.20.0` / `8.18.0` | `package.json` | `Pool` globalThis singleton in `src/db/index.ts`. |
-| ORM | Drizzle ORM / drizzle-kit | `0.45.2` / `0.31.10` | `package.json` + `drizzle.config.json` | `drizzle.config.json` → `schema: ./src/db/schema.ts`, `dialect: postgresql`. |
+| ORM | Drizzle ORM / drizzle-kit | `0.45.2` / `0.31.10` | `package.json` + `drizzle.config.ts` | `drizzle.config.ts` (env-aware — reads `DATABASE_URL` via dotenv, `.json` is the fallback) → `schema: ./src/db/schema.ts`, `dialect: postgresql`. |
 | DB | PostgreSQL (`postgres:17-alpine`) | `17.11` | `docker-compose.yml` + live `SELECT version()` | DB `nave_spire_dev`, user `nave_spire_user:nave_spire_secret`, port `5432`, network `nave_spire_net`. Extensions `pgcrypto`, `pg_trgm`. |
 | Fonts | `next/font` (6 families) | via `next@16.2.6` | `src/app/layout.tsx` | `Syne`, `Newsreader`, `Figtree`, `Fraunces`, `Cormorant_Garamond`, `Source_Sans_3` — all `display:"swap"` + `variable:"--font-*"`. |
 | Images | `next/image` | via `next@16.2.6` | `src/app/page.tsx`, `src/app/compare/page.tsx` | `fill` + `object-cover`, `priority` on above-the-fold hero; assets at `public/images/*.jpg`. |
-| Lint | `eslint` / `eslint-config-next` | `9.39.4` / `16.2.6` | `package.json` + `eslint.config.mjs` | Flat config, `globalIgnores([".next/**","out/**","build/**","next-env.d.ts"])`. |
+| Lint | `eslint` / `eslint-config-next` | `9.39.5` / `16.3.4` | `package.json` + `eslint.config.mjs` | Flat config, `globalIgnores([".next/**","out/**","build/**","next-env.d.ts","skills/**"])` — lint is 0 errors / 0 warnings. |
 | Env | `dotenv` | `17.3.1` | `package.json` | Only for Drizzle CLI / `npx tsx --env-file`; Next loads `.env.local` natively. |
 | Runtime | Node.js | `≥22` (verified `24.19.0`) | `package.json` engines (implicit) + CI `setup-node@v4` | CI `node-version: 22`. |
 | Package Manager | `npm` (lockfile present) | `npm@12.0.2` | `package-lock.json` | No `pnpm-workspace.yaml` — single package. |
@@ -153,11 +153,11 @@ curl -s http://127.0.0.1:3000/api/audit | jq '.audit.sites | length' # 2
 
 | File | Purpose | Key Detail |
 |------|---------|------------|
-| `next.config.ts` | Next config + security headers | `headers()` on every route: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, baseline CSP (`default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'` — `'unsafe-inline'` required by Next inline bootstrap; strict nonce CSP is future work). |
+| `next.config.ts` | Next config + security headers + hardening | `poweredByHeader: false` (no framework fingerprinting — audit L-A) and `headers()` on every route: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, baseline CSP (`default-src 'self'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'` — `'unsafe-inline'` required by Next inline bootstrap; strict nonce CSP is future work). |
 | `tsconfig.json` | TS strict | `strict:true, noEmit:true, isolatedModules:true, moduleResolution:bundler, jsx:react-jsx, baseUrl:., paths:{@/*:["./src/*"]}, include:[next-env.d.ts, **/*.ts, **/*.tsx, .next/types/**], exclude:[node_modules, dist, .next, coverage, skills]`. |
-| `eslint.config.mjs` | Lint (flat) | `import {defineConfig, globalIgnores}` + `eslint-config-next/core-web-vitals` + `globalIgnores([".next/**","out/**","build/**","next-env.d.ts"])`. |
+| `eslint.config.mjs` | Lint (flat) | `import {defineConfig, globalIgnores}` + `eslint-config-next/core-web-vitals` + `globalIgnores([".next/**","out/**","build/**","next-env.d.ts","skills/**"])` — lint is 0 errors / 0 warnings. |
 | `postcss.config.mjs` | PostCSS | `plugins: {"@tailwindcss/postcss": {}}` — Tailwind v4 CSS-first, no `autoprefixer` needed. |
-| `drizzle.config.json` | Drizzle CLI | `dialect:postgresql, schema:./src/db/schema.ts, dbCredentials.url: postgresql://nave_spire_user:…@nave_spire_dev`. Must match `.env.local` + `docker-compose.yml`. |
+| `drizzle.config.ts` | Drizzle CLI (primary, env-aware) | Reads `DATABASE_URL` from `.env.local`/`.env`/env via dotenv; falls back to the local `nave_spire_dev` URL so `generate` works on a fresh clone. `drizzle.config.json` is the legacy fallback. Must match `docker-compose.yml`. |
 | `docker-compose.yml` | Local Postgres | `postgres:17-alpine`, `container_name: nave_spire_postgres`, `POSTGRES_DB: nave_spire_dev`, `POSTGRES_USER: nave_spire_user`, `POSTGRES_PASSWORD: nave_spire_secret`, `ports: 5432:5432`, `volumes: postgres_data + ./infrastructure/postgres/init`, `healthcheck: pg_isready -U nave_spire_user -d nave_spire_dev`, `networks: nave_spire_net`. |
 | `infrastructure/postgres/init/00-create-extensions.sql` | Init extensions | `CREATE EXTENSION IF NOT EXISTS pgcrypto;` + `pg_trgm;` — runs once on first `docker compose up -d`. |
 | `.env.example` | Env template | 1 var `DATABASE_URL` with local/alt/prod comments — `nave_spire_dev` primary. |
@@ -173,7 +173,7 @@ curl -s http://127.0.0.1:3000/api/audit | jq '.audit.sites | length' # 2
 | `npm run dev` | `next dev` (Turbopack default) | **Locally prefer** `npx next dev --webpack` until Turbopack panic is upstream-fixed (see §10). |
 | `npm run build` | `next build` (Turbopack) | Succeeds without DB (`force-dynamic` skips DB at build) — `typecheck` + `lint` run inside build too. |
 | `npm run start` | `next start` | Production server (requires `.next/` + reachable `DATABASE_URL`). |
-| `npm run lint` | `eslint .` | Flat config; 12 `skills/` warnings are expected noise. |
+| `npm run lint` | `eslint .` | Flat config; **0 errors / 0 warnings** — `skills/**` is in `globalIgnores` since v1.2.0. |
 | `npm run typecheck` | `tsc --noEmit` | Strict, `no any`. |
 | `npx drizzle-kit generate` | Generate migration file from `schema.ts` diff | Recommended path when schema changes (produces `drizzle/` migration). |
 | `npx drizzle-kit push` | Push schema directly (dev) | Used on fresh DB; no migration file. |
@@ -639,11 +639,11 @@ curl -s http://127.0.0.1:3000/api/audit | jq '.audit.sites | length' # 2
 # 1. Type strict
 npm run typecheck            # tsc --noEmit — exit 0, no any
 
-# 2. Lint (project code — skills/ noise is expected)
-npm run lint                 # 0 errors (12 skills/ warnings ignored)
+# 2. Lint (flat config — vendored skills/ is globally ignored)
+npm run lint                 # 0 errors / 0 warnings
 
-# 2b. Tests (Vitest — 18 unit/component tests)
-npm test                     # format.ts, schema ≡ migration pin, rate limiter, regression guards
+# 2b. Tests (Vitest — 29 unit/component/regression tests)
+npm test                     # format.ts, schema ≡ migration pin, rate limiter, regression + docs-contract guards
 
 # 3. DB schema is pushed (fresh or migrated)
 # Fresh:
@@ -813,8 +813,8 @@ Build does not need a live DB; API smoke is manual (requires `docker compose up 
 ### 14.5 Security / Validation
 
 - **Zod not used** — validation is manual early-return in `src/app/api/reviews/route.ts`: `asString`/`asScore` + length/enum/integer checks → `400 {error:string}`. Input is `unknown` JSON, not a typed DTO.
-- **Rate limiting (audit M2)** — per-IP fixed-window limiter (5 req/min, bounded 1000-client map, in-memory per instance) gates `POST /api/reviews` before validation/DB. Over limit → `429` + `Retry-After`. Multi-instance serverless would need a shared store.
-- **Security headers (audit M1)** — `next.config.ts headers()`: X-Frame-Options DENY, nosniff, strict-origin-when-cross-origin, Permissions-Policy, baseline CSP with `frame-ancestors 'none'` (CSP keeps `'unsafe-inline'` for Next inline bootstrap; nonce CSP is future work).
+- **Rate limiting (audit M2)** — per-IP fixed-window limiter (5 req/min, bounded 1000-client map, in-memory per instance) gates `POST /api/reviews` before validation/DB. Over limit → `429` + `Retry-After`. Enforcement is **best-effort across instances**: live-verified 2026-09-08 (docs/CODE_AUDIT_2026-09-08.md M-A) that the deployed host answers from more than one instance, so a clean 6-request burst may not deterministically 429. A shared store (Redis/edge) is required for a deterministic global limit — Known Gap #8.
+- **Security headers (audit M1)** — `next.config.ts`: `poweredByHeader: false` (audit L-A — no `x-powered-by`) and `headers()`: X-Frame-Options DENY, nosniff, strict-origin-when-cross-origin, Permissions-Policy, baseline CSP with `frame-ancestors 'none'` (CSP keeps `'unsafe-inline'` for Next inline bootstrap; nonce CSP is future work).
 - **No auth** — reviews are anonymous-but-named (`reviewerName` 2–80 is the anti-dump).
 - **SQL:** Drizzle parameterized (`db.select`, `db.insert().values(...).returning()`).
 - **XSS:** stored payloads render escaped through React (live-verified with a probe; no `innerHTML`/`dangerouslySetInnerHTML`/`eval` in `src/`).
@@ -829,8 +829,8 @@ Build does not need a live DB; API smoke is manual (requires `docker compose up 
 
 ### 14.7 Testing (landed 2026-09-07)
 
-- **Vitest + RTL** configured (`vitest.config.mts` — `.mts` so Vite loads the ESM config natively, jsdom, `@` alias). `npm test` = one-shot `vitest run` (24 tests incl. `src/regression/repo-hygiene.test.ts`); `npm run test:watch` for watch mode. CI runs it.
-- Co-located suites: `src/lib/format.test.ts` (formatters + no-raw-hex token rule), `src/db/schema.test.ts` (6 tables ≡ `drizzle/0000_wise_gateway.sql` — a drift here means `drizzle-kit generate` would emit a migration), `src/lib/server/rate-limit.test.ts` (allow/block/window/bounded map), `src/regression/docs-drift.test.ts` (retired `maison_dev` identifier guard).
+- **Vitest + RTL** configured (`vitest.config.mts` — `.mts` so Vite loads the ESM config natively, `import.meta.dirname` for the alias base, jsdom, `@` alias). `npm test` = one-shot `vitest run` (29 tests incl. `src/regression/repo-hygiene.test.ts` and `src/regression/docs-contract.test.ts`); `npm run test:watch` for watch mode. CI runs it.
+- Co-located suites: `src/lib/format.test.ts` (formatters + no-raw-hex token rule), `src/db/schema.test.ts` (6 tables ≡ `drizzle/0000_wise_gateway.sql` — a drift here means `drizzle-kit generate` would emit a migration), `src/lib/server/rate-limit.test.ts` (allow/block/window/bounded map), `src/regression/docs-drift.test.ts` (retired `maison_dev` identifier guard), `src/regression/docs-contract.test.ts` (living-docs sync: retired doc strings, current test count, `poweredByHeader: false`, no `__dirname` in the Vitest config — when you add tests, bump the documented count in the same commit).
 - E2E: manual agent-browser pass against the live site is documented in `docs/CODE_AUDIT_2026-09-07.md` (filters, clipboard, review submit 201 + persistence, validation matrix, XSS escaping, mobile 375px, skip link, reduced-motion). A Playwright harness remains optional future work — co-locate specs under `e2e/` when added.
 
 ---
@@ -1334,8 +1334,8 @@ export function contrastText(hex: string): string; // YIQ ≥160 → #16130e els
 |-----------|------|---------|------|
 | `npm install` | ~18s | `npm install` | `package-lock.json` present; no `pnpm`. |
 | `typecheck` | ~4.2s | `npm run typecheck` (`tsc --noEmit`) | Also runs inside `next build`. |
-| `lint` | ~1s | `npm run lint` (`eslint .`) | 12 `skills/` warnings ignored; 0 project errors. |
-| `npm test` | ~3s | `vitest run` | 18 unit/component tests; no DB needed (schema pin is static). |
+| `lint` | ~1s | `npm run lint` (`eslint .`) | 0 errors / 0 warnings — `skills/**` globally ignored. |
+| `npm test` | ~3s | `vitest run` | 29 unit/component/regression tests; no DB needed (schema pin is static). |
 | `next build` | ~7.9s + 4.7s typecheck | `npm run build` | Turbopack; `ƒ` dynamic, no DB needed. With dummy `DATABASE_URL` for import guard. |
 | `drizzle-kit push` (fresh) | ~2s | `npx drizzle-kit push` | Creates 6 tables; idempotent re-run → `Changes applied` (no-op if schema unchanged). |
 | `ensureSeeded()` (first request) | ~40–60ms | `GET /` or `GET /api/audit` after fresh `TRUNCATE` | Inserts 2 sites + 10 criteria + 20 scores + 10 findings + 36 tokens = 78 rows. |
@@ -1355,6 +1355,7 @@ export function contrastText(hex: string): string; // YIQ ≥160 → #16130e els
 | ** Live DB init** | 2026-09-07 | Docker `nave_spire_postgres` healthy, `push` 6 tables, `getFullAudit` seed 2/10/20/10/36 → 3 reviews persisted **(local dev DB — the live prod DB was at 0 reviews until the 2026-09-07 E2E pass wrote 2 smoke rows)**, API 400 matrix verified, 6 pages 200, 4 images 200, CSS motion hits verified. | `.env.*` + `drizzle.config` aligned to `nave_spire_dev`; `VALIDATION_REPORT.md` → 430 lines. | Live: `GET /api/health` 200, `POST /api/reviews` 201×3, `psql count(*)=3` |
 | **Tiered audit + remediation** | 2026-09-07 | Deep audit (`skills/code-review-and-audit` + native fallbacks) + live browser E2E. Findings: C1 `src/db/` never committed (build/typecheck broken on fresh clone), C3 `error.tsx` still said `maison_dev`, H2 3 high npm vulns, M1 no security headers, M2 no rate limiting, M3 envelope doc drift, M4 raw-hex severity colors, M5 no tests; 3 false positives retracted after `od` byte inspection (C2/L4/L5). | Reconstructed `src/db/{index,schema}.ts` (drizzle-kit generate → no-op = byte-compatible); fixed error hint; `npm audit fix` (next 16.3.4, postcss 8.5.28, sharp 0.35.4); `next.config.ts` security headers; per-IP rate limiter + 429; `@theme` severity tokens; Vitest suite (18 tests); docs realigned (AGENTS/CLAUDE/README/SKILL v1.1.0). Evidence: `docs/CODE_AUDIT_2026-09-07.md`. | `npm test` 18/18, `typecheck` 0, `lint` 0 errors, `build` ✓, headers + 429 verified on local prod server |
 | **start_server_log triage → build portability** | 2026-09-07 | `start_server_log.txt`: all pre-build steps green, then `next build` FATAL Turbopack panic `FileSystemPath("").join("../mattpocok-skills/...")`. Reproduced byte-identically (absolute escape symlink + sibling dir). Also found: `.env.local` force-committed; 12 lint warnings from vendored `skills/` polyfill; vitest ESM-as-CJS warning; docker sudo-fallback stderr leak; stale "no test suite" script comments; `.env.example` URL-format typo. | `globals.css` `source("../")` (build proven green with hostile link present); 15 machine-local symlinks untracked + names gitignored; `.env.local` untracked; `skills/**` → ESLint `globalIgnores` (0/0); `vitest.config.ts` → `.mts`; `start_server.sh` fallback quieting + real gate semantics; `.env.example` typo fixed; new `repo-hygiene.test.ts` (6 contracts); docs realigned (SKILL v1.2.0, AP-9/L-4 corrected, ADR-10). | `npm test` 24/24, `typecheck` 0, `lint` 0 errors/0 warnings, `build` ✓, `drizzle generate` no-op, `git check-ignore` verified |
+| **Session-5 deep audit + living-docs contract** | 2026-09-08 | Re-validated every Session-2/3 remediation against the tree AND the live host (all held; zero Critical/High). New findings: M-A rate limiter is best-effort across instances — live bursts disproved the single-node assumption (429 observed non-deterministically); M-B seven living-doc drifts (stale 18-test count ×2, stale 12-warnings lint claims ×3, stale tool versions, drizzle.config primacy, machine-specific path); L-A `x-powered-by` exposed; L-B Vitest `__dirname` deprecation; L-C stale CLAUDE path. | `poweredByHeader: false` in `next.config.ts`; `vitest.config.mts` → `import.meta.dirname`; rate-limit.ts comment + README/CLAUDE/AGENTS/SKILL state the best-effort truth; all 7 doc drifts corrected; new `docs-contract.test.ts` (5 contracts) pins docs ↔ code sync; SKILL v1.3.0. Evidence: `docs/CODE_AUDIT_2026-09-08.md`. | `npm test` 29/29 (RED first: 5/5 new tests failed pre-fix), `typecheck` 0, `lint` 0/0, `build` ✓, live E2E re-pass (routes, headers, validation matrix, 429 path, filters, clipboard, review submit + refresh, mobile 375px, skip link) |
 
 ---
 
@@ -1418,17 +1419,17 @@ Currently `METHOD_NOTES.confidence` says: "A headed browser pass over the runnin
 | **Components** | `src/components/{Masthead,StudioFooter,ScoreBar,FindingsBoard,CopySwatch,ReviewForm}.tsx` (6, 3 client) |
 | **Pages** | `src/app/{page,compare,findings,palettes,reviews,method}/page.tsx` + `error.tsx` + `not-found.tsx` |
 | **API** | `src/app/api/{audit,health,reviews}/route.ts` (all `force-dynamic`) |
-| **Env** | `.env.example` (template) → `.env.local` (active), `drizzle.config.json` (must match `docker-compose.yml`) |
+| **Env** | `.env.example` (template) → `.env.local` (active), `drizzle.config.ts` (env-aware primary; `.json` fallback, must match `docker-compose.yml`) |
 | **DB** | `sudo docker compose up -d` (`nave_spire_postgres`, `nave_spire_dev`) |
 | **Schema push** | `npx drizzle-kit push` (fresh) or `generate`+`migrate` (incremental) |
 | **Quality** | `npm run typecheck` → `npm run lint` → `npm test` → `npm run build` (or `.github/workflows/ci.yml`) |
-| **Tests** | `src/lib/format.test.ts`, `src/db/schema.test.ts`, `src/lib/server/rate-limit.test.ts`, `src/regression/docs-drift.test.ts`, `src/regression/repo-hygiene.test.ts` (24 via `vitest run`) |
+| **Tests** | `src/lib/format.test.ts`, `src/db/schema.test.ts`, `src/lib/server/rate-limit.test.ts`, `src/regression/docs-drift.test.ts`, `src/regression/repo-hygiene.test.ts`, `src/regression/docs-contract.test.ts` (29 via `vitest run`) |
 | **Security** | `next.config.ts` headers() (XFO/nosniff/CSP), `src/lib/server/rate-limit.ts` (5 req/min/IP on POST /api/reviews) |
 | **Smoke** | `GET /api/health` → `GET /api/audit` → `for p in /*; curl $p` → `POST /api/reviews` → `psql count(*)` (see §11) |
 | **Docs** | `AGENTS.md` (compact), `CLAUDE.md` (standards), `README.md` (onboarding), `VALIDATION_REPORT.md` (430 lines), `docs/CODE_AUDIT_2026-09-07.md` (tiered audit + E2E evidence) |
-| **Skill** | This file — `nave-spire_SKILL.md` v1.2.0 |
+| **Skill** | This file — `nave-spire_SKILL.md` v1.3.0 |
 
 ---
 
-*End of skill — v1.2.0 · 2026-09-07 · All claims verified against the live codebase (npm test 24/24, typecheck 0, lint 0 errors/0 warnings, build ✓, security headers + 429 verified on local prod server, live browser E2E pass on https://nave-spire.jesspete.shop/ — see docs/CODE_AUDIT_2026-09-07.md). When extending, respect §1's five non-negotiables — especially source-over-screenshot and shared-gold. For drift detection, run the smoke in Appendix D and compare against §19 hexes and §20 interfaces.*
+*End of skill — v1.3.0 · 2026-09-08 · All claims verified against the live codebase (npm test 29/29, typecheck 0, lint 0 errors/0 warnings, build ✓, security headers + poweredByHeader:false + 429 verified, live browser E2E pass on https://nave-spire.jesspete.shop/ — see docs/CODE_AUDIT_2026-09-08.md). When extending, respect §1's five non-negotiables — especially source-over-screenshot and shared-gold. For drift detection, run the smoke in Appendix D and compare against §19 hexes and §20 interfaces.*
 

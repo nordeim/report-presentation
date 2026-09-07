@@ -107,7 +107,7 @@ Follow this six-phase workflow for all implementation tasks:
 
 ```bash
 # Prerequisites: Node.js 22+, PostgreSQL 17 (local or managed), pnpm (or npm)
-cd /Home1/project/report-presentation
+cd report-presentation
 
 # Install dependencies
 npm install
@@ -115,7 +115,8 @@ npm install
 # Set up environment
 cp .env.example .env.local  # Edit DATABASE_URL to point to your Postgres instance
 # Local dev (docker compose): DATABASE_URL="postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev"
-# Must match docker-compose.yml + drizzle.config.json
+# Must match docker-compose.yml; drizzle.config.ts reads DATABASE_URL from .env.local itself (env-aware) and
+# drizzle.config.json is the fallback
 
 # Database: run migrations (or rely on auto-seed)
 # Drizzle Kit for migrations:
@@ -135,7 +136,7 @@ npm run dev
 | `npm run start` | Start production server |
 | `npm run lint` | ESLint 9 (flat config, Next.js core-web-vitals) |
 | `npm run typecheck` | `tsc --noEmit` strict type check |
-| `npm test` / `npm run test:watch` | Vitest suite (24 tests) / watch mode |
+| `npm test` / `npm run test:watch` | Vitest suite (29 tests) / watch mode |
 
 ### Database Commands
 
@@ -155,7 +156,7 @@ npx drizzle-kit push
 
 ## Testing Strategy
 
-**Current state**: Vitest + React Testing Library landed (2026-09-07). `npm test` → `vitest run` (24 tests green, incl. `src/regression/repo-hygiene.test.ts` — build-portability contracts: no tracked symlinks escaping the repo root, `.env.local` untracked, Tailwind scan scoped to `src/`, `skills/**` lint-ignored, `vitest.config.mts`); `npm run test:watch` for watch mode. Browser E2E was executed manually via agent-browser against the live site (see `docs/CODE_AUDIT_2026-09-07.md`); Playwright harness remains optional future work.
+**Current state**: Vitest + React Testing Library landed (2026-09-07). `npm test` → `vitest run` (29 tests green, incl. `src/regression/repo-hygiene.test.ts` — build-portability contracts: no tracked symlinks escaping the repo root, `.env.local` untracked, Tailwind scan scoped to `src/`, `skills/**` lint-ignored, `vitest.config.mts`; and `src/regression/docs-contract.test.ts` — living-docs sync: retired doc strings, current test count, `poweredByHeader: false`, no `__dirname` in the Vitest config); `npm run test:watch` for watch mode. Browser E2E was executed manually via agent-browser against the live site (see `docs/CODE_AUDIT_2026-09-07.md` and the 2026-09-08 re-validation in `docs/CODE_AUDIT_2026-09-08.md`); Playwright harness remains optional future work.
 
 ### Test Pyramid (as shipped)
 
@@ -165,6 +166,7 @@ npx drizzle-kit push
 | Schema pin | Vitest | 6 tables ≡ committed migration `drizzle/0000_wise_gateway.sql` | `src/db/schema.test.ts` |
 | Unit | Vitest | Per-IP rate limiter (allow/block/window/bounded map) | `src/lib/server/rate-limit.test.ts` |
 | Regression | Vitest (node:fs scan) | Retired identifiers never reappear (`maison_dev`) | `src/regression/docs-drift.test.ts` |
+| Docs contract | Vitest (node:fs scan + config import) | Living docs stay in sync with code (counts, versions, config pins) | `src/regression/docs-contract.test.ts` |
 | E2E | Manual (agent-browser) / future Playwright | Live journeys: pages, filters, clipboard, review submit, validation matrix, a11y floor | `docs/CODE_AUDIT_2026-09-07.md` |
 
 ### Test Conventions
@@ -188,7 +190,7 @@ npm run typecheck
 # npx prettier --write .
 ```
 
-**ESLint Config**: `eslint.config.mjs` extends `eslint-config-next/core-web-vitals`. Ignores `.next/`, `out/`, `build/`, `next-env.d.ts`.
+**ESLint Config**: `eslint.config.mjs` extends `eslint-config-next/core-web-vitals`. Ignores `.next/`, `out/`, `build/`, `next-env.d.ts`, `skills/**` (vendored agent tooling — lint is 0 errors / 0 warnings).
 
 ### Code Style Conventions
 
@@ -369,7 +371,7 @@ You are successful when:
 - Visitor reviews persist to PostgreSQL and appear on `/reviews` after `router.refresh()` — and spam is throttled (429 after 5 req/min/IP)
 - TypeScript strict check passes (`npm run typecheck`)
 - ESLint passes (`npm run lint`)
-- Test suite passes (`npm test` — 24 tests)
+- Test suite passes (`npm test` — 29 tests)
 - Build succeeds (`npm run build` — succeeds even without DB)
 - Security headers present on every response (X-Frame-Options, nosniff, CSP `frame-ancestors 'none'`)
 - Accessibility contracts hold: skip link works, focus rings visible, reduced-motion kills all animation; drawer trap / Escape applies to upstream parish drawer (journal `Masthead` is currently static)
@@ -402,14 +404,14 @@ You are successful when:
 
 ### Known Gaps (tracked for future work)
 
-1. ~~**No test suite**~~ — Vitest + RTL landed 2026-09-07 (24 tests). Remaining: Playwright E2E harness + API-route integration tests with testcontainers
+1. ~~**No test suite**~~ — Vitest + RTL landed 2026-09-07 (29 tests). Remaining: Playwright E2E harness + API-route integration tests with testcontainers
 2. ~~**No `error.tsx` / `not-found.tsx`** — Added in polish pass (`src/app/error.tsx` is DB-aware)~~
 3. **No pre-commit hooks** — Add Husky + lint-staged (CI covers lint+typecheck+test+build on push/PR to main)
 4. ~~**No CI/CD pipeline** — `.github/workflows/ci.yml` covers lint+typecheck+test+build~~
 5. **Image optimization** — Hero images are local `/public/images/*.jpg`; consider next/image remote patterns if migrating to CMS
 6. **Analytics/telemetry** — None currently; consider Vercel Analytics or Plausible if needed
 7. **Strict CSP nonce** — Current CSP uses `'unsafe-inline'` (Next inline bootstrap); move to nonce-based CSP via middleware
-8. **Shared-store rate limiting** — The per-IP limiter is in-memory per instance; move to Redis/edge store for serverless multi-instance
+8. **Shared-store rate limiting** — The per-IP limiter is in-memory per instance; enforcement is best-effort across instances, live-verified 2026-09-08 that the deployed host answers from more than one instance (`docs/CODE_AUDIT_2026-09-08.md` M-A). Move to Redis/edge store for a deterministic global limit
 
 ### When Extending
 

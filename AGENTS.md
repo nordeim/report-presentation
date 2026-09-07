@@ -50,7 +50,7 @@ No arbitrary Tailwind **colors** outside `@theme`. Editorial type scale (`text-[
 - Motion utilities (all transform/opacity only): `.rise-in` (+ `.d1`–`.d4` stagger), `.hero-ken-burns` (20s), `.bloom-drift` (14s), `.card-lift`, `.gold-rule`, `.drawer-in` — plus `.bg-grain`, `.gold-hairline`, `.weave`
 
 ### 5. Test suite (Vitest + RTL)
-`npm test` runs 24 unit/component/regression tests (`vitest run`). Co-locate `*.test.ts(x)` next to the module: `src/lib/format.test.ts`, `src/db/schema.test.ts` (pins schema ≡ `drizzle/0000_wise_gateway.sql`), `src/lib/server/rate-limit.test.ts`, `src/regression/docs-drift.test.ts` (retired-identifier guard), `src/regression/repo-hygiene.test.ts` (build-portability contracts — see Gotchas). E2E: browser passes are manual/playwright — see `docs/CODE_AUDIT_2026-09-07.md`. New logic ships with tests (red → green).
+`npm test` runs 29 unit/component/regression tests (`vitest run`). Co-locate `*.test.ts(x)` next to the module: `src/lib/format.test.ts`, `src/db/schema.test.ts` (pins schema ≡ `drizzle/0000_wise_gateway.sql`), `src/lib/server/rate-limit.test.ts`, `src/regression/docs-drift.test.ts` (retired-identifier guard), `src/regression/repo-hygiene.test.ts` (build-portability contracts — see Gotchas), `src/regression/docs-contract.test.ts` (living-docs sync — see References). E2E: browser passes are manual/playwright — see `docs/CODE_AUDIT_2026-09-08.md`. New logic ships with tests (red → green).
 
 ### 6. TypeScript strict = enforced
 `strict: true`, `noEmit: true`, `isolatedModules: true`. Never use `any`. Prefer `interface` for object shapes. Explicit `Promise<>` returns on exported async functions.
@@ -103,7 +103,7 @@ Production needs `?sslmode=require`. For fresh DB (clone → prod): `cp .env.exa
 
 - **Build does NOT require DB** — All data pages are `force-dynamic`, so `npm run build` skips `getFullAudit()` and succeeds even with `DATABASE_URL` unreachable. **Runtime** does require DB — check `GET /api/health` and see `src/app/error.tsx` fallback.
 - **Commit everything the deploy needs** — `src/db/` once shipped only in the deploy workspace and the fresh-clone build broke (see `docs/CODE_AUDIT_2026-09-07.md` C1). Pre-ship on a fresh clone: `npm ci && npm test && npm run typecheck && npm run build`.
-- **`POST /api/reviews` is rate-limited** — 5 req/min per IP via `src/lib/server/rate-limit.ts`; over the limit returns `429` + `Retry-After`. The limiter is in-memory per instance.
+- **`POST /api/reviews` is rate-limited** — 5 req/min per IP via `src/lib/server/rate-limit.ts`; over the limit returns `429` + `Retry-After`. The limiter is in-memory per instance, so enforcement is best-effort across instances — live-verified 2026-09-08 that the deployed host may answer from more than one instance, and a clean 6-request burst can slip through (docs/CODE_AUDIT_2026-09-08.md M-A).
 - **Security headers live in `next.config.ts`** — X-Frame-Options/nosniff/Referrer-Policy/Permissions-Policy/CSP. Don't remove `frame-ancestors 'none'`.
 - **Never commit machine-local `skills/` symlinks or `.env.local`** — the 15 `skills/<name>` links point at absolute host paths outside the repo; where they resolve, Tailwind v4 auto-detection follows them and Turbopack panics (`FileSystemPath … leaves the filesystem root` — fatal in `next build` AND `next dev`, see AP-9 in the SKILL). Their names are gitignored (recreate locally with `ln -s`); `.env.*` is gitignored too; `src/regression/repo-hygiene.test.ts` fails if either is ever tracked again.
 - **ESLint is 0 errors / 0 warnings** — `skills/**` is vendored agent tooling and lives in `eslint.config.mjs` `globalIgnores`. Don't lint it; don't remove the ignore.
@@ -115,14 +115,15 @@ Production needs `?sslmode=require`. For fresh DB (clone → prod): `cp .env.exa
 
 - `npm run typecheck` → `tsc --noEmit` (not `tsc`)
 - `npm run lint` → `eslint .` (flat config, extends Next.js core-web-vitals)
-- `npm test` → `vitest run` (24 unit/component/regression tests); `npm run test:watch` for watch mode
+- `npm test` → `vitest run` (29 unit/component/regression tests); `npm run test:watch` for watch mode
 - DB: `npm run db:setup` is the one-shot fresh-clone init (`generate` + `migrate` + `seed` via `src/scripts/seed.ts`); individual steps are `db:generate`/`db:migrate`/`db:seed`
 - `drizzle.config.ts` is env-aware (reads `DATABASE_URL` via `dotenv`); `drizzle.config.json` is the fallback
 
 ## References
 
 - `CLAUDE.md` — Full implementation standards, architecture, anti-patterns
-- `docs/CODE_AUDIT_2026-09-07.md` — Tiered audit + E2E findings + remediation evidence
+- `docs/CODE_AUDIT_2026-09-07.md` — Session 2–3 tiered audit + E2E findings + remediation evidence
+- `docs/CODE_AUDIT_2026-09-08.md` — Session 5 deep audit (live E2E re-validation; M-A rate-limit truth, M-B living-doc drift remediated via `src/regression/docs-contract.test.ts`)
 - `src/lib/audit-data.ts` — Source of truth for all scores, findings, palette tokens
 - `src/app/globals.css` — Design system (@theme tokens, motion utilities)
 - `drizzle.config.ts` (env-aware) + `drizzle.config.json` (fallback) + `drizzle/` (committed migrations) — DB dialect + schema location

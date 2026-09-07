@@ -3,10 +3,10 @@
 ![Next.js](https://img.shields.io/badge/Next.js-16.3.4-000000?logo=next.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.2.6-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-3178C6?logo=typescript&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.1.17-06B6D4?logo=tailwindcss&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.3.3-06B6D4?logo=tailwindcss&logoColor=white)
 ![Drizzle ORM](https://img.shields.io/badge/Drizzle%20ORM-0.45.2-C5F74F?logo=drizzle&logoColor=black)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-vitest%2024%2F24-brightgreen)
+![Tests](https://img.shields.io/badge/tests-vitest%2029%2F29-brightgreen)
 
 A design audit journal comparing two Singapore parish websites — **Church of the Blessed Sacrament (BSC)** and **Church of Our Lady of Lourdes (OLL)** — across ten evidence-backed criteria. Scores are derived from source tokens, components, and information architecture, not from rendered screenshots.
 
@@ -34,7 +34,7 @@ Nave & Spire is a Next.js 16 web application that presents a structured, evidenc
 | Framework | Next.js (App Router) | 16.3.4 | RSC, routing, API routes |
 | UI | React | 19.2.6 | Component model |
 | Language | TypeScript | 5.9.3 | Strict mode, no `any` |
-| Styling | Tailwind CSS | 4.1.17 | CSS-first `@theme` config |
+| Styling | Tailwind CSS | 4.3.3 | CSS-first `@theme` config |
 | Database | PostgreSQL | 17 | Primary data store |
 | ORM | Drizzle ORM | 0.45.2 | Type-safe queries, migrations |
 | Testing | Vitest + RTL | latest | Unit/component tests (`npm test`) |
@@ -71,7 +71,7 @@ Layer 2 — Components (RSC + client)      src/components/** → may import Laye
 Layer 3 — Domain (queries, seed, rate-limit, format, audit-data, db) src/lib/** + src/db/**
 ```
 
-All DB access goes through `src/lib/queries.ts` (`getFullAudit()`, `insertReview()`), which calls `ensureSeeded()` first. `POST /api/reviews` additionally passes a per-IP fixed-window rate limiter (`src/lib/server/rate-limit.ts`, 5 req/min, bounded client map).
+All DB access goes through `src/lib/queries.ts` (`getFullAudit()`, `insertReview()`), which calls `ensureSeeded()` first. `POST /api/reviews` additionally passes a per-IP fixed-window rate limiter (`src/lib/server/rate-limit.ts`, 5 req/min, bounded client map). The limiter is in-memory per instance, so enforcement is best-effort across instances — live-verified 2026-09-08 that the deployed host may answer from more than one instance (see `docs/CODE_AUDIT_2026-09-08.md` M-A); a deterministic global limit needs a shared store.
 
 ## File Hierarchy
 
@@ -111,7 +111,9 @@ All DB access goes through `src/lib/queries.ts` (`getFullAudit()`, `insertReview
 │   ├── 📄 format.test.ts            # Unit tests incl. no-raw-hex token rule
 │   └── 📄 audit-data.ts             # ALL seed constants (sites, criteria, scores, findings, palettes)
 └── 📂 regression/
-    └── 📄 docs-drift.test.ts        # Retired-identifier scan (maison_dev guard)
+    ├── 📄 docs-drift.test.ts        # Retired-identifier scan (maison_dev guard)
+    ├── 📄 repo-hygiene.test.ts      # Build-portability contracts (symlinks, env, configs)
+    └── 📄 docs-contract.test.ts     # Living-docs sync (stale strings, test count, config pins)
 ```
 
 ## Quick Start
@@ -236,7 +238,7 @@ All gated by `@media (prefers-reduced-motion: reduce)` → durations = `0.01ms` 
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/reviews` | POST | ❌ (rate-limited) | Submit review (name, site, 3× scores 1–10, comment 12–800 chars) — 5 req/min per IP, then `429` + `Retry-After` |
+| `/api/reviews` | POST | ❌ (rate-limited) | Submit review (name, site, 3× scores 1–10, comment 12–800 chars) — 5 req/min per IP, then `429` + `Retry-After`. Enforcement is best-effort across instances (in-memory limiter; live-verified multi-instance deployment) |
 | `/api/health` | GET | ❌ | DB connectivity check (`select 1`) |
 | `/api/audit` | GET | ❌ | Full audit JSON (sites, criteria, scores, findings, tokens, reviews) |
 
@@ -305,7 +307,7 @@ npm run start
 | `npm run build` fails / pages show "DATABASE_URL is required" at **runtime** | Build itself does NOT need DB (`force-dynamic` skips `getFullAudit()` at build). Runtime does — ensure `DATABASE_URL` in `.env.local` matches `docker-compose.yml` (`nave_spire_dev`). Check `GET /api/health` — see `src/app/error.tsx` fallback for DB hint. |
 | `next build`/`next dev` panics `FileSystemPath … mattpocok-skills` | **Fixed v1.2.0.** Root cause was committed machine-local `skills/` symlinks escaping the repo root (Tailwind v4 auto-detection → Turbopack root-escape). `globals.css` now scopes detection to `src/` (`source("../")`) and the link names are gitignored — recreate local links with `ln -s` if needed; they stay untracked. Guard: `src/regression/repo-hygiene.test.ts`. |
 | ~~`npm run lint` shows warnings from `/skills/` directory~~ | **Resolved v1.2.0** — `skills/**` is vendored agent tooling, now in `eslint.config.mjs` `globalIgnores`. `npm run lint` is 0 errors / 0 warnings. |
-| `POST /api/reviews` returns `429` | Rate limit reached (5 req/min per IP, in-memory per instance). Wait for the `Retry-After` window. Behind serverless multi-instance, use a shared store for global limits. |
+| `POST /api/reviews` returns `429` | Rate limit reached (5 req/min per IP, in-memory per instance). Wait for the `Retry-After` window. Behind serverless multi-instance, use a shared store for global limits. Enforcement is best-effort across instances — live-verified 2026-09-08 (see `docs/CODE_AUDIT_2026-09-08.md` M-A). |
 | Page returns empty data on fresh DB | Ensure `ensureSeeded()` runs — it's called by `getFullAudit()`. Check DB connectivity. |
 | Motion doesn't respect `prefers-reduced-motion` | All animations use transform/opacity only. Verify CSS in `globals.css` uses `@media (prefers-reduced-motion: reduce)`. |
 | Fonts not loading in production | `next/font` self-hosts at build time. Ensure `npm run build` completes without network errors. |
@@ -318,6 +320,8 @@ MIT — see `LICENSE` (if present) or project root.
 
 - **CLAUDE.md** — Full implementation standards, architecture, anti-patterns for AI agents
 - **AGENTS.md** — Compact agent onboarding instructions
+- `docs/CODE_AUDIT_2026-09-07.md` — Session 2–3 tiered audit + remediation evidence
+- `docs/CODE_AUDIT_2026-09-08.md` — Session 5 deep audit + live E2E re-validation
 - `src/lib/audit-data.ts` — Source of truth for all scores, findings, palette tokens
 - `src/app/globals.css` — Design system (`@theme` tokens, motion utilities)
 - `drizzle.config.ts` (env-aware, reads `DATABASE_URL`) + `drizzle.config.json` (fallback) — DB dialect + schema location; `drizzle/` holds committed migrations
