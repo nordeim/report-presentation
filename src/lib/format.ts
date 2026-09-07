@@ -7,9 +7,9 @@ export function severityClass(severity: string) {
     case "critical":
       return "bg-rose/15 text-rose";
     case "high":
-      return "bg-[#8f5038]/15 text-[#8f5038]";
+      return "bg-high-sev/15 text-high-sev";
     case "medium":
-      return "bg-rule/15 text-[#85641c]";
+      return "bg-rule/15 text-gold-700";
     case "low":
       return "bg-sage/15 text-sage";
     default:
@@ -45,5 +45,10 @@ export function contrastText(hex: string) {
   const g = Number.parseInt(normalized.slice(2, 4), 16);
   const b = Number.parseInt(normalized.slice(4, 6), 16);
   const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  // NaN (non-hex characters) must not fall through to light text —
+  // default to dark ink, which stays readable on any unknown surface.
+  if (Number.isNaN(yiq)) {
+    return "#16130e";
+  }
   return yiq >= 160 ? "#16130e" : "#f8f5ef";
 }

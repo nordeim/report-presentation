@@ -19,7 +19,7 @@ export default function GlobalError({
       </h1>
       <p className="mt-6 text-lg leading-relaxed text-ink-soft">
         {isDb
-          ? "The database is not reachable. If you are running locally, start it with docker compose up -d postgres and ensure DATABASE_URL in .env.local matches docker-compose.yml (maison_dev). Then reload."
+          ? "The database is not reachable. If you are running locally, start it with docker compose up -d postgres and ensure DATABASE_URL in .env.local matches docker-compose.yml (nave_spire_dev). Then reload."
           : "An unexpected error occurred while rendering this page."}
       </p>
       {error.message ? (
