@@ -1,4 +1,4 @@
-$ ./start_server.sh
+$ ./start_server.sh 
 [start] === Nave & Spire — fresh-clone production start ===
 [start] repo: /Home1/project/report-presentation
 [start] db: "postgresql://***:***@127.0.0.1:5432/nave_spire_dev"
@@ -15,11 +15,11 @@ $ ./start_server.sh
 [start] Installing dependencies …
 npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.hirok.io
 npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.hirok.io
-npm warn deprecated eslint@9.39.4: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+npm warn deprecated eslint@9.39.5: This version is no longer supported. Please see https://eslint.org/version-support for other options.
 
-added 476 packages, and audited 477 packages in 12s
+added 480 packages, and audited 481 packages in 12s
 
-165 packages are looking for funding
+166 packages are looking for funding
   run `npm fund` for details
 
 4 moderate severity vulnerabilities
@@ -35,8 +35,7 @@ npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install
 [ok] deps installed
 [start] Database setup (docker compose + db:setup) …
 [start]   DATABASE_URL is nave_spire_dev → ensuring docker compose postgres
-permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
- Container nave_spire_postgres Running
+ Container nave_spire_postgres Running 
 [start]   waiting for postgres healthy …
 [ok] postgres healthy (via sudo docker exec)
 [start]   running npm run db:setup (generate + migrate + seed) …
@@ -60,15 +59,15 @@ npm notice run db:migrate
 npm notice run drizzle-kit migrate
 No config path provided, using default 'drizzle.config.ts'
 Reading config file '/Home1/project/report-presentation/drizzle.config.ts'
-[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🛡️ auth for agents: https://vestauth.com
 Using 'pg' driver for database querying
 [✓] migrations applied successfully!npm notice run db:seed
 npm notice run tsx src/scripts/seed.ts
-[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
 → DATABASE_URL: postgresql://nave_spire_user:****@127.0.0.1:5432/nave_spire_dev
 ✓ DB connectivity OK (select 1)
 → Seeding (ensureSeeded)…
-✓ Seed OK in 768ms
+✓ Seed OK in 652ms
   Sites:    2 (bsc 8.67 (10 scores, 18 tokens) | oll 8.79 (10 scores, 18 tokens))
   Criteria: 10 (brand-fit, typography, colour, layout, components, motion, accessibility, ia, voice, craft)
   Findings: 10 (high, medium, medium, medium, low, low, info, info, low, info)
@@ -76,7 +75,7 @@ npm notice run tsx src/scripts/seed.ts
 ✓ Counts match expected fresh-DB snapshot (2 / 10 / 10 / 10×2 / 18×2).
 ✓ Done. Database is ready for production.
 [start]   verifying tables via docker exec psql
-        tablename
+        tablename       
   ----------------------
    audit_criteria
    audit_findings
@@ -85,50 +84,159 @@ npm notice run tsx src/scripts/seed.ts
    audit_scores
    audit_sites
   (6 rows)
-
+  
 [ok] database ready
 [start] Running quality gate (typecheck + lint) …
 npm notice run typecheck
 npm notice run tsc --noEmit
 npm notice run lint
 npm notice run eslint .
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 
-/Home1/project/report-presentation/skills/kimi-pdf/scripts/paged.polyfill.js
-     45:2   warning  Unused eslint-disable directive (no problems were reported from 'no-empty-function')
-    135:2   warning  Unused eslint-disable directive (no problems were reported from 'no-unused-vars')
-   5801:6   warning  Unused eslint-disable directive (no problems were reported from 'brace-style')
-  23337:10  warning  Unused eslint-disable directive (no problems were reported from 'brace-style')
-  23507:43  warning  Unused eslint-disable directive (no problems were reported from 'operator-linebreak' or 'indent')
-  23508:43  warning  Unused eslint-disable directive (no problems were reported from 'operator-linebreak' or 'indent')
-  23509:43  warning  Unused eslint-disable directive (no problems were reported from 'operator-linebreak' or 'indent')
-  23510:43  warning  Unused eslint-disable directive (no problems were reported from 'operator-linebreak' or 'indent')
-  32769:3   warning  Unused eslint-disable directive (no problems were reported from 'complexity')
-  32838:8   warning  Unused eslint-disable directive (no problems were reported from 'max-depth')
-  32894:4   warning  Unused eslint-disable directive (no problems were reported from 'no-self-compare')
-  32935:2   warning  Unused eslint-disable directive (no problems were reported from 'no-unused-vars')
+ FAIL  src/regression/repo-hygiene.test.ts > repo hygiene: environment files > does not track .env.local (machine-local secrets stay untracked)
+AssertionError: expected '.env.local' to be '' // Object.is equality
 
-✖ 12 problems (0 errors, 12 warnings)
-  0 errors and 12 warnings potentially fixable with the `--fix` option.
+- Expected
++ Received
 
++ .env.local
+
+ ❯ src/regression/repo-hygiene.test.ts:47:40
+     45| describe("repo hygiene: environment files", () => {
+     46|   it("does not track .env.local (machine-local secrets stay untracked)…
+     47|     expect(git("ls-files .env.local")).toBe("");
+       |                                        ^
+     48|   });
+     49|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 4 passed (5)
+      Tests  1 failed | 23 passed (24)
+   Start at  06:59:31
+   Duration  3.59s (environment 79%, import 14%, transform 4%, tests 3%)
+
+Environment  jsdom was created 5 times · 6.61s total, 79% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+(venv) pete@pop-os:/Home1/project/report-presentation
+$ git restore --staged .env.local 
+(venv) pete@pop-os:/Home1/project/report-presentation
+$ ./start_server.sh 
+[start] === Nave & Spire — fresh-clone production start ===
+[start] repo: /Home1/project/report-presentation
+[start] db: "postgresql://***:***@127.0.0.1:5432/nave_spire_dev"
+[start] port: 3000 / host: 0.0.0.0
+
+[start] Checking prerequisites …
+[ok] docker Docker version 29.1.2, build 890dcca
+[ok] docker compose Docker Compose version v5.5.0
+[ok] node v24.19.0 / npm 12.0.2 / OpenSSL 3.6.1 27 Jan 2026 (Library: OpenSSL 3.6.1 27 Jan 2026)
+[start] Ensuring .env.local …
+[start]   .env.local exists — keeping (will ensure DATABASE_URL)
+[start]   DATABASE_URL present (masked: postgresql://***:***@127.0.0.1:5432/nave_spire_dev)
+[ok] .env.local ready (DATABASE_URL set)
+[start] Installing dependencies …
+npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.hirok.io
+npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.hirok.io
+npm warn deprecated eslint@9.39.5: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+
+added 480 packages, and audited 481 packages in 12s
+
+166 packages are looking for funding
+  run `npm fund` for details
+
+4 moderate severity vulnerabilities
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm warn install-scripts 1 package had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   unrs-resolver@1.12.2 (postinstall: node postinstall.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+[ok] deps installed
+[start] Database setup (docker compose + db:setup) …
+[start]   DATABASE_URL is nave_spire_dev → ensuring docker compose postgres
+ Container nave_spire_postgres Running 
+[start]   waiting for postgres healthy …
+[ok] postgres healthy (via sudo docker exec)
+[start]   running npm run db:setup (generate + migrate + seed) …
+npm notice run db:setup
+npm notice run npm run db:generate && npm run db:migrate && npm run db:seed
+npm notice run db:generate
+npm notice run drizzle-kit generate
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/Home1/project/report-presentation/drizzle.config.ts'
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+6 tables
+audit_criteria 5 columns 0 indexes 0 fks
+audit_findings 10 columns 0 indexes 0 fks
+audit_palette_tokens 7 columns 0 indexes 1 fks
+audit_reviews 8 columns 0 indexes 0 fks
+audit_scores 5 columns 0 indexes 2 fks
+audit_sites 19 columns 0 indexes 0 fks
+
+No schema changes, nothing to migrate 😴
+npm notice run db:migrate
+npm notice run drizzle-kit migrate
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/Home1/project/report-presentation/drizzle.config.ts'
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
+Using 'pg' driver for database querying
+[✓] migrations applied successfully!npm notice run db:seed
+npm notice run tsx src/scripts/seed.ts
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+→ DATABASE_URL: postgresql://nave_spire_user:****@127.0.0.1:5432/nave_spire_dev
+✓ DB connectivity OK (select 1)
+→ Seeding (ensureSeeded)…
+✓ Seed OK in 37ms
+  Sites:    2 (bsc 8.67 (10 scores, 18 tokens) | oll 8.79 (10 scores, 18 tokens))
+  Criteria: 10 (brand-fit, typography, colour, layout, components, motion, accessibility, ia, voice, craft)
+  Findings: 10 (high, medium, medium, medium, low, low, info, info, low, info)
+  Reviews:  0 (user-generated, not seeded)
+✓ Counts match expected fresh-DB snapshot (2 / 10 / 10 / 10×2 / 18×2).
+✓ Done. Database is ready for production.
+[start]   verifying tables via docker exec psql
+        tablename       
+  ----------------------
+   audit_criteria
+   audit_findings
+   audit_palette_tokens
+   audit_reviews
+   audit_scores
+   audit_sites
+  (6 rows)
+  
+[ok] database ready
+[start] Running quality gate (typecheck + lint) …
+npm notice run typecheck
+npm notice run tsc --noEmit
+npm notice run lint
+npm notice run eslint .
 npm notice run test
 npm notice run vitest run
 (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
-  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+  - `__dirname` (vitest.config.mts:15:20). Use `import.meta.dirname` instead
 Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
  RUN  v5.0.0 /Home1/project/report-presentation
 
- ✓ src/lib/format.test.ts (9 tests) 13ms
- ✓ src/lib/server/rate-limit.test.ts (5 tests) 84ms
- ✓ src/db/schema.test.ts (3 tests) 9ms
- ✓ src/regression/docs-drift.test.ts (1 test) 6ms
+ ✓ src/regression/repo-hygiene.test.ts (6 tests) 28ms
+ ✓ src/lib/format.test.ts (9 tests) 10ms
+ ✓ src/db/schema.test.ts (3 tests) 10ms
+ ✓ src/regression/docs-drift.test.ts (1 test) 7ms
+ ✓ src/lib/server/rate-limit.test.ts (5 tests) 83ms
 
- Test Files  4 passed (4)
-      Tests  18 passed (18)
-   Start at  20:52:35
-   Duration  2.20s (environment 81%, import 12%, transform 4%, tests 3%, worker 1%)
+ Test Files  5 passed (5)
+      Tests  24 passed (24)
+   Start at  07:00:52
+   Duration  2.65s (environment 84%, import 10%, transform 3%, tests 2%, worker 1%)
 
-Environment  jsdom was created 4 times · 3.62s total, 81% of tracked time
+Environment  jsdom was created 5 times · 5.26s total, 84% of tracked time
              create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
              learn more: https://vitest.dev/guide/improving-performance#test-environments
 
@@ -138,98 +246,65 @@ npm notice run build
 npm notice run next build
 ▲ Next.js 16.3.4 (Turbopack)
 - Environments: .env.local
-✓ Running next.config.ts took 28ms
+✓ Running next.config.ts took 32ms
 
   Creating an optimized production build ...
+✓ Compiled successfully in 8.8s
+  Running TypeScript ...
+  Finished TypeScript in 4.0s ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/2) ...
+✓ Generating static pages using 3 workers (2/2) in 176ms
+  Finalizing page optimization ...
 
------
-FATAL: An unexpected Turbopack error occurred. A panic log has been written to /tmp/next-panic-5d21a821fecf2d8270d81e9592cb7c4d.log.
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /api/audit
+├ ƒ /api/health
+├ ƒ /api/reviews
+├ ƒ /compare
+├ ƒ /findings
+├ ƒ /method
+├ ƒ /palettes
+└ ƒ /reviews
 
-To help make Turbopack better, report this error by clicking here: https://bugs.nextjs.org/search?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20app%20endpoint%20%2Fpage&body=Turbopack%20version%3A%20%60299180d3%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0AFailed%20to%20write%20app%20endpoint%20%2Fpage%0A%0ACaused%20by%3A%0A-%20%5Bproject%5D%2Fsrc%2Fapp%2Fglobals.css%20%5Bapp-client%5D%20%28css%29%0A-%20FileSystemPath%28%22%22%29.join%28%22..%2Fmattpocok-skills%2Fskills%2Fengineering%2Fask-matt%22%29%20leaves%20the%20filesystem%20root%0A%0ADebug%20info%3A%0A-%20Execution%20of%20get_all_written_entrypoints_with_issues_operation%20failed%0A-%20Execution%20of%20EntrypointsOperation%3A%3Anew%20failed%0A-%20Execution%20of%20all_entrypoints_write_to_disk_operation%20failed%0A-%20Execution%20of%20output_assets_operation%20failed%0A-%20Execution%20of%20%3CAppEndpoint%20as%20Endpoint%3E%3A%3Aoutput%20failed%0A-%20Failed%20to%20write%20app%20endpoint%20%2Fpage%0A-%20Execution%20of%20AppEndpoint%3A%3Aoutput%20failed%0A-%20Execution%20of%20whole_app_module_graph_operation%20failed%0A-%20Execution%20of%20%2AProject%3A%3Aget_all_additional_entries%20failed%0A-%20Execution%20of%20ModuleGraph%3A%3Afrom_graphs%20failed%0A-%20Execution%20of%20ModuleGraph%3A%3Afrom_graphs_inner%20failed%0A-%20Execution%20of%20SingleModuleGraph%3A%3Anew_with_entries%20failed%0A-%20%5Bproject%5D%2Fsrc%2Fapp%2Fglobals.css%20%5Bapp-client%5D%20%28css%29%0A-%20Execution%20of%20primary_chunkable_referenced_modules%20failed%0A-%20Execution%20of%20%3CCssModule%20as%20Module%3E%3A%3Areferences%20failed%0A-%20Execution%20of%20parse_css%20failed%0A-%20Execution%20of%20%3CPostCssTransformedAsset%20as%20Asset%3E%3A%3Acontent%20failed%0A-%20Execution%20of%20PostCssTransformedAsset%3A%3Aprocess%20failed%0A-%20Execution%20of%20evaluate_webpack_loader%20failed%0A-%20FileSystemPath%28%22%22%29.join%28%22..%2Fmattpocok-skills%2Fskills%2Fengineering%2Fask-matt%22%29%20leaves%20the%20filesystem%20root%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
------
 
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
 
-> Build error occurred
-Error [TurbopackInternalError]: Failed to write app endpoint /page
+[ok] build complete → /Home1/project/report-presentation/.next/BUILD_ID (ugwb9B42E_r0IFxtuzmQ3)
+[start] Starting server on :3000 (host 0.0.0.0) …
+[start]   server pid 1305525 → /Home1/project/report-presentation/server.log
+[ok] server ready at http://localhost:3000
+[start] Health check on http://localhost:3000 …
+[start]   ✓ api/health http://localhost:3000/api/health → 200
+[start]   ✓ api/audit http://localhost:3000/api/audit → 200
+[start]   ✓ home http://localhost:3000/ → 200
+[start]   ✓ compare http://localhost:3000/compare → 200
+[start]   ✓ findings http://localhost:3000/findings → 200
+[start]   ✓ palettes http://localhost:3000/palettes → 200
+[start]   ✓ reviews http://localhost:3000/reviews → 200
+[start]   ✓ method http://localhost:3000/method → 200
+[start]   ✓ 404 /this-does-not-exist-xyz → 404
+[start]   ✓ image studio-hero.jpg → 200
+[start]   ✓ image bsc-tent.jpg → 200
+[start]   ✓ image oll-spire.jpg → 200
+[start]   ✓ image nave-light.jpg → 200
+[start]   ✓ api/audit has bsc
+[ok] all health checks passed
 
-Caused by:
-- [project]/src/app/globals.css [app-client] (css)
-- FileSystemPath("").join("../mattpocok-skills/skills/engineering/ask-matt") leaves the filesystem root
+[ok] === Server live ===
+  URL:        http://localhost:3000  (all routes ƒ dynamic, ○ /_not-found static)
+  PID file:   /Home1/project/report-presentation/server.pid  (pid 1305525)
+  Log:        /Home1/project/report-presentation/server.log  (tail -f /Home1/project/report-presentation/server.log)
+  Health:     curl http://localhost:3000/api/health  # {ok:true}
+  Audit:      curl http://localhost:3000/api/audit | jq .audit.sites
+  Reviews:    curl -X POST http://localhost:3000/api/reviews -H 'Content-Type: application/json' -d '{...}'
+  Stop:       kill $(cat /Home1/project/report-presentation/server.pid)  # or: fuser -k 3000/tcp
 
-Debug info:
-- Execution of get_all_written_entrypoints_with_issues_operation failed
-- Execution of EntrypointsOperation::new failed
-- Execution of all_entrypoints_write_to_disk_operation failed
-- Execution of output_assets_operation failed
-- Execution of <AppEndpoint as Endpoint>::output failed
-- Failed to write app endpoint /page
-- Execution of AppEndpoint::output failed
-- Execution of whole_app_module_graph_operation failed
-- Execution of *Project::get_all_additional_entries failed
-- Execution of ModuleGraph::from_graphs failed
-- Execution of ModuleGraph::from_graphs_inner failed
-- Execution of SingleModuleGraph::new_with_entries failed
-- [project]/src/app/globals.css [app-client] (css)
-- Execution of primary_chunkable_referenced_modules failed
-- Execution of <CssModule as Module>::references failed
-- Execution of parse_css failed
-- Execution of <PostCssTransformedAsset as Asset>::content failed
-- Execution of PostCssTransformedAsset::process failed
-- Execution of evaluate_webpack_loader failed
-- FileSystemPath("").join("../mattpocok-skills/skills/engineering/ask-matt") leaves the filesystem root
-    at <unknown> (TurbopackInternalError: Failed to write app endpoint /page) {
-  type: 'TurbopackInternalError',
-  location: undefined
-}
+[start] Done. DB is nave_spire_dev (or your DATABASE_URL), build is .next/, server is backgrounded.
 (venv) pete@pop-os:/Home1/project/report-presentation
-$ rm -rf .next/ */.next
-(venv) pete@pop-os:/Home1/project/report-presentation
-$ npm run build
-npm notice run build
-npm notice run next build
-▲ Next.js 16.3.4 (Turbopack)
-- Environments: .env.local
-✓ Running next.config.ts took 29ms
-
-  Creating an optimized production build ...
-
------
-FATAL: An unexpected Turbopack error occurred. A panic log has been written to /tmp/next-panic-356b90319027915720e16d404a825a79.log.
-
-To help make Turbopack better, report this error by clicking here: https://bugs.nextjs.org/search?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20app%20endpoint%20%2Fpage&body=Turbopack%20version%3A%20%60299180d3%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0AFailed%20to%20write%20app%20endpoint%20%2Fpage%0A%0ACaused%20by%3A%0A-%20%5Bproject%5D%2Fsrc%2Fapp%2Fglobals.css%20%5Bapp-client%5D%20%28css%29%0A-%20FileSystemPath%28%22%22%29.join%28%22..%2Fmattpocok-skills%2Fskills%2Fengineering%2Fask-matt%22%29%20leaves%20the%20filesystem%20root%0A%0ADebug%20info%3A%0A-%20Execution%20of%20get_all_written_entrypoints_with_issues_operation%20failed%0A-%20Execution%20of%20EntrypointsOperation%3A%3Anew%20failed%0A-%20Execution%20of%20all_entrypoints_write_to_disk_operation%20failed%0A-%20Execution%20of%20output_assets_operation%20failed%0A-%20Execution%20of%20%3CAppEndpoint%20as%20Endpoint%3E%3A%3Aoutput%20failed%0A-%20Failed%20to%20write%20app%20endpoint%20%2Fpage%0A-%20Execution%20of%20AppEndpoint%3A%3Aoutput%20failed%0A-%20Execution%20of%20whole_app_module_graph_operation%20failed%0A-%20Execution%20of%20%2AProject%3A%3Aget_all_additional_entries%20failed%0A-%20Execution%20of%20ModuleGraph%3A%3Afrom_graphs%20failed%0A-%20Execution%20of%20ModuleGraph%3A%3Afrom_graphs_inner%20failed%0A-%20Execution%20of%20SingleModuleGraph%3A%3Anew_with_entries%20failed%0A-%20%5Bproject%5D%2Fsrc%2Fapp%2Fglobals.css%20%5Bapp-client%5D%20%28css%29%0A-%20Execution%20of%20primary_chunkable_referenced_modules%20failed%0A-%20Execution%20of%20%3CCssModule%20as%20Module%3E%3A%3Areferences%20failed%0A-%20Execution%20of%20parse_css%20failed%0A-%20Execution%20of%20%3CPostCssTransformedAsset%20as%20Asset%3E%3A%3Acontent%20failed%0A-%20Execution%20of%20PostCssTransformedAsset%3A%3Aprocess%20failed%0A-%20Execution%20of%20evaluate_webpack_loader%20failed%0A-%20FileSystemPath%28%22%22%29.join%28%22..%2Fmattpocok-skills%2Fskills%2Fengineering%2Fask-matt%22%29%20leaves%20the%20filesystem%20root%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
------
-
-
-> Build error occurred
-Error [TurbopackInternalError]: Failed to write app endpoint /page
-
-Caused by:
-- [project]/src/app/globals.css [app-client] (css)
-- FileSystemPath("").join("../mattpocok-skills/skills/engineering/ask-matt") leaves the filesystem root
-
-Debug info:
-- Execution of get_all_written_entrypoints_with_issues_operation failed
-- Execution of EntrypointsOperation::new failed
-- Execution of all_entrypoints_write_to_disk_operation failed
-- Execution of output_assets_operation failed
-- Execution of <AppEndpoint as Endpoint>::output failed
-- Failed to write app endpoint /page
-- Execution of AppEndpoint::output failed
-- Execution of whole_app_module_graph_operation failed
-- Execution of *Project::get_all_additional_entries failed
-- Execution of ModuleGraph::from_graphs failed
-- Execution of ModuleGraph::from_graphs_inner failed
-- Execution of SingleModuleGraph::new_with_entries failed
-- [project]/src/app/globals.css [app-client] (css)
-- Execution of primary_chunkable_referenced_modules failed
-- Execution of <CssModule as Module>::references failed
-- Execution of parse_css failed
-- Execution of <PostCssTransformedAsset as Asset>::content failed
-- Execution of PostCssTransformedAsset::process failed
-- Execution of evaluate_webpack_loader failed
-- FileSystemPath("").join("../mattpocok-skills/skills/engineering/ask-matt") leaves the filesystem root
-    at <unknown> (TurbopackInternalError: Failed to write app endpoint /page) {
-  type: 'TurbopackInternalError',
-  location: undefined
-}
-
+$ ps -ef | grep next
+pete     1305542 1305525  0 07:01 pts/6    00:00:00 sh -c next start --port 3000 --hostname 0.0.0.0
+pete     1305543 1305542  7 07:01 pts/6    00:00:01 next-server (v16.3.4)
