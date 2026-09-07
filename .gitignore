@@ -69,4 +69,27 @@ scripts/oll*.html
 *.local
 
 # skills/ is INTENTIONALLY tracked (skills/skills-catalog.md is part of the
-# repo's agent tooling contract) — do not add it to .gitignore.
+# repo's agent tooling contract) — do not ignore the directory itself.
+# Machine-local agent-skill SYMLINKS must never be tracked, though: the owner
+# links these names against a sibling clone of mattpocok-skills, and committed
+# links that resolve outside the project root crash `next build` on that
+# machine (Turbopack panic: "FileSystemPath … leaves the filesystem root" —
+# Tailwind v4 auto-detection follows them; dangling links pass CI, so the
+# crash only shows on the owner's box). Contract-pinned by
+# src/regression/repo-hygiene.test.ts. Recreate locally with:
+#   ln -s /Home1/project/mattpocok-skills/skills/<group>/<name> skills/<name>
+/skills/ask-matt
+/skills/diagnosing-bugs
+/skills/git-guardrails-claude-code
+/skills/grill-me
+/skills/grilling
+/skills/handoff
+/skills/improve-codebase-architecture
+/skills/migrate-to-shoehorn
+/skills/scaffold-exercises
+/skills/setup-pre-commit
+/skills/tdd
+/skills/teach
+/skills/to-questionnaire
+/skills/wait-what
+/skills/writing-for-agents
