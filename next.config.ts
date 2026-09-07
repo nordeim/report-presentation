@@ -28,6 +28,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Audit L-A (docs/CODE_AUDIT_2026-09-08.md): Next.js advertises itself via
+  // `x-powered-by` by default; fingerprinting adds nothing here.
+  poweredByHeader: false,
+
   async headers() {
     return [
       {
