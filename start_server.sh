@@ -7,7 +7,7 @@
 #   - DATABASE_URL (Postgres) via .env.local / .env.example + docker compose
 #   - npm ci (frozen lockfile) with fallback to npm install
 #   - DB init via `npm run db:setup` (= generate + migrate + seed, idempotent)
-#   - quality gate: typecheck + lint (no test suite yet — Known Gap)
+#   - quality gate: typecheck + lint + vitest suite (enforced, fails fast)
 #   - build (`next build` — Turbopack, force-dynamic skips DB at build)
 #   - standalone start via `npm start` (next start) with correct env sourcing
 #   - health check (api/health, api/audit, 6 pages, 404, images)
@@ -150,13 +150,19 @@ setup_db() {
   if [[ "$db_url" == *"nave_spire_dev"* ]]; then
     if have docker; then
       log "  DATABASE_URL is nave_spire_dev → ensuring docker compose postgres"
-      # Try without sudo first, then with sudo
+      # Try without sudo first (quietly), then with sudo; surface the
+      # unsudoed error only if BOTH attempts fail. Without this, a harmless
+      # "permission denied on docker.sock" leaks into the log even when the
+      # sudo fallback succeeds (seen in start_server_log.txt).
       local compose_ok=0
-      if docker compose up -d 2>&1 | tail -n 10; then
+      local unsudoed_err=""
+      if unsudoed_err="$(docker compose up -d 2>&1)"; then
         compose_ok=1
+        printf '%s\n' "$unsudoed_err" | tail -n 10
       elif have sudo && sudo docker compose up -d 2>&1 | tail -n 10; then
         compose_ok=1
       else
+        printf '%s\n' "$unsudoed_err" | tail -n 5 >&2
         warn "docker compose up -d failed — is the daemon running? DATABASE_URL may still be unreachable"
       fi
       if [[ "$compose_ok" -eq 1 ]]; then
@@ -206,17 +212,9 @@ run_quality_gate() {
   log "Running quality gate (typecheck + lint) …"
   npm run typecheck 2>&1 | tail -n 20
   npm run lint 2>&1 | tail -n 30
-  # Test suite is a Known Gap (0 tests) — run if present, warn if not
-  if npm run test --silent 2>&1 | grep -qi "test"; then
-    log "  running tests"
-    npm test 2>&1 | tail -n 30
-  else
-    if grep -q '"test"' "$REPO_ROOT/package.json" 2>/dev/null; then
-      npm test 2>&1 | tail -n 30 || warn "tests failed"
-    else
-      warn "No test suite (Known Gap) — skipping npm test"
-    fi
-  fi
+  # Test suite (Vitest — part of the gate since remediation; a failure
+  # aborts via set -euo pipefail, same as typecheck/lint)
+  npm test 2>&1 | tail -n 30
   ok "quality gate passed"
 }
 
