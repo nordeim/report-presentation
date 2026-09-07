@@ -1,4 +1,5 @@
 import { insertReview } from "@/lib/queries";
+import { checkRateLimit } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,24 @@ function asScore(value: unknown) {
   return n;
 }
 
+function clientKey(request: Request) {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return request.headers.get("x-real-ip") ?? "unknown";
+}
+
 export async function POST(request: Request) {
+  // M2: unauthenticated write endpoint — throttle before any DB work.
+  const limiter = checkRateLimit(clientKey(request));
+  if (!limiter.allowed) {
+    return Response.json(
+      { error: "Too many reviews from this address. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(limiter.retryAfterSeconds ?? 60) } },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
