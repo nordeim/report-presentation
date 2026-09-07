@@ -19,10 +19,10 @@ Nave & Spire is a Next.js 16 web application that presents a structured, evidenc
 |---------|-------------|
 | 📊 **Side-by-side Comparison** | Ten criteria scored 0–10 with delta, per-site rationale, and visual score bars |
 | 🔍 **Findings Board** | Filterable ledger by severity (high/medium/low/info) and scope (BSC/OLL/shared) |
-| 🎨 **Palette Explorer** | 33 tokens per site with copy-to-clipboard, grouped by semantic role (Surface, Ink, Blue, Gold, Accent) |
+| 🎨 **Palette Explorer** | 18 tokens per site with copy-to-clipboard, grouped by semantic role (Surface, Ink, Blue, Gold, Accent) |
 | ✍️ **Visitor Reviews** | Submit Visual/UX/A11y scores (1–10) with comments; persisted to PostgreSQL |
 | 📖 **Methodology Page** | Documents sources, scoring approach, confidence levels, and what would raise confidence |
-| ♿ **Accessibility-First** | Skip link, gold focus ring (2px/3px offset), `prefers-reduced-motion` kill-switch, drawer focus trap |
+| ♿ **Accessibility-First** | Skip link, gold focus ring (2px/3px offset), `prefers-reduced-motion` kill-switch (drawer trap is upstream parish-site, journal `Masthead` is static) |
 
 ## Architecture
 
@@ -112,7 +112,8 @@ npm install
 
 # 2. Configure environment
 cp .env.example .env.local
-# Edit .env.local: set DATABASE_URL to your PostgreSQL instance
+# Edit .env.local: set DATABASE_URL — local dev is "postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev"
+# Must match docker-compose.yml + drizzle.config.json. Or use plain postgres: "postgresql://postgres:postgres@127.0.0.1:5432/app_db"
 
 # 3. (Optional) Run migrations explicitly
 # Otherwise auto-seeding runs on first request
@@ -137,9 +138,9 @@ npm run dev
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `DATABASE_URL` | ✅ | PostgreSQL connection string | `postgresql://postgres:postgres@127.0.0.1:5432/app_db` |
+| `DATABASE_URL` | ✅ | PostgreSQL connection string — must match `docker-compose.yml` for local dev | `postgresql://maison:maison_local_dev@127.0.0.1:5432/maison_dev` (or `postgresql://postgres:postgres@127.0.0.1:5432/app_db` for plain postgres) |
 
-**Production**: Add `?sslmode=require` to connection string.
+**Production**: Add `?sslmode=require` to connection string. See `.env.example` for all variants.
 
 ## Design System
 
@@ -161,16 +162,16 @@ npm run dev
 |-------|-----|-------|
 | `--color-bsc` | `#3458a8` | Primary sapphire (links, accents) |
 | `--color-bsc-deep` | `#0a1122` | Hero/footer background |
-| Sapphire 50–950 | Scale | Full range in `@theme` |
+| Full tints (sapphire-300 `#7a9bdb`, gold `#d4ad42`, pine/terracotta) | — | 18 tokens/site in `src/lib/audit-data.ts` (`PALETTE_SEEDS`) |
 
 **OLL — Marian Blue**
 | Token | Hex | Usage |
 |-------|-----|-------|
 | `--color-oll` | `#2c4a8e` | Primary Marian blue |
 | `--color-oll-deep` | `#0a1428` | Hero/footer background |
-| Blue 50–950 | Scale | Full range in `@theme` |
-| `--color-rose` | `#8a4a5f` | Mystical Rose accent |
-| `--color-sage` | `#2f4f37` | Formation accent |
+| Full tints (blue-300 `#7f9fde`, gold `#d4ad42`, rose/sage) | — | 18 tokens/site in `src/lib/audit-data.ts` |
+| `--color-rose` | `#8a4a5f` | Mystical Rose accent (in `@theme`) |
+| `--color-sage` | `#2f4f37` | Formation accent (in `@theme`) |
 
 **Shared**
 | Token | Hex | Usage |
@@ -183,18 +184,18 @@ npm run dev
 | `--color-rule-soft` | `#d4ad42` | Gold highlight |
 | `--color-cream` | `#f8f5ef` | Card/surface fills |
 
-### Motion Utilities (transform/opacity only, reduced-motion compliant)
+### Motion Utilities (all `transform`/`opacity` only, reduced-motion compliant)
 
 | Utility | Description |
 |---------|-------------|
-| `.rise-in` | Cubic-bezier entrance with stagger delays `d1`–`d4` |
-| `.hero-ken-burns` | 20s slow zoom on hero images |
-| `.bloom-drift` | 14s subtle parallax |
-| `.card-lift` | Hover lift on cards |
-| `.gold-rule` | Width animation on hover |
-| `.drawer-in` | Mobile nav slide-in |
+| `.rise-in` + `.d1`–`.d4` | `cubic-bezier(0.22,1,0.36,1)` entrance, 0.08s stagger, `@keyframes rise-in` |
+| `.hero-ken-burns` | 20s slow zoom (`scale 1 → 1.06`) |
+| `.bloom-drift` | 14s subtle parallax (`translateY + scale`, infinite alternate) |
+| `.card-lift` | Hover lift (`translateY(-3px)`) |
+| `.gold-rule` | `scaleX(0→1)` draw on `.group:hover` |
+| `.drawer-in` | 260ms slide (`translateY(-6px)` + opacity) |
 
-All gated by `@media (prefers-reduced-motion: reduce)` → durations = 0.01ms.
+All gated by `@media (prefers-reduced-motion: reduce)` → durations = `0.01ms` (see `src/app/globals.css`).
 
 ## Database Schema
 
@@ -262,7 +263,7 @@ npm run start
 
 | Issue | Solution |
 |-------|----------|
-| `npm run build` fails with "DATABASE_URL is required" | Set `DATABASE_URL` in `.env.local` or CI secrets; build runs `getFullAudit()` at compile time |
+| `npm run build` fails / pages show "DATABASE_URL is required" at **runtime** | Build itself does NOT need DB (`force-dynamic` skips `getFullAudit()` at build). Runtime does — ensure `DATABASE_URL` in `.env.local` matches `docker-compose.yml` (`maison_dev`). Check `GET /api/health` — see `src/app/error.tsx` fallback for DB hint. |
 | `npm run lint` shows warnings from `/skills/` directory | Expected — warnings come from tracked `skills/` folder, not project code. Ignore. |
 | Page returns empty data on fresh DB | Ensure `ensureSeeded()` runs — it's called by `getFullAudit()`. Check DB connectivity. |
 | Motion doesn't respect `prefers-reduced-motion` | All animations use transform/opacity only. Verify CSS in `globals.css` uses `@media (prefers-reduced-motion: reduce)`. |

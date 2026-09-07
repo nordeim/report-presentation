@@ -15,7 +15,8 @@ export default async function PalettesPage() {
         Same gold. Different blues.
       </h1>
       <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">
-        Both palettes are 33 tokens in <code className="font-sans text-sm">src/index.css @theme</code>.
+        Both palettes are 18 tokens in <code className="font-sans text-sm">src/lib/audit-data.ts</code> (and
+        mirrored as CSS primitives in <code className="font-sans text-sm">src/app/globals.css @theme</code>).
         Cream, parchment, and gold-400 (#d4ad42) are shared metal. Identity lives in the blue — and
         in whether the third hue is pine/terracotta or rose/sage. Click a swatch to copy its hex.
       </p>

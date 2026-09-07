@@ -39,10 +39,11 @@ Required because `getFullAudit()` calls `ensureSeeded()` which writes on first r
 All queries route through `ensureSeeded()` in `src/lib/queries.ts`. Fresh DB = empty tables → seed runs on first query. **Never bypass** — direct `db.select()` without seeding will return empty results.
 
 ### 4. Design tokens live in `globals.css @theme`
-No arbitrary Tailwind values. Extend `@theme` instead. Key tokens:
+No arbitrary Tailwind **colors** outside `@theme`. Editorial type scale (`text-[0.62rem]`, `tracking-[0.16em]`) is intentional and exempt. For colors/spacing/shadows, extend `@theme` instead. Key tokens:
 - Fonts: `--font-display` (Syne), `--font-body` (Newsreader), `--font-sans` (Figtree), `--font-fraunces`, `--font-cormorant`, `--font-source`
-- Colors: `--color-bsc`/`--color-bsc-deep` (sapphire), `--color-oll`/`--color-oll-deep` (Marian blue), `--color-rule` (gold), `--color-ink`, `--color-paper`
+- Colors (primitives): `--color-bsc`/`--color-bsc-deep` (sapphire), `--color-oll`/`--color-oll-deep` (Marian blue), `--color-rule`/`--color-rule-soft` (gold), `--color-ink`/`--color-ink-soft`, `--color-paper`/`--color-paper-deep`, `--color-rose`, `--color-sage`, `--color-cream` — full tints (sapphire-300 etc.) live as data in `audit-data.ts` (18 tokens/site)
 - Shadow: `--shadow-journal`
+- Motion utilities (all transform/opacity only): `.rise-in` (+ `.d1`–`.d4` stagger), `.hero-ken-burns` (20s), `.bloom-drift` (14s), `.card-lift`, `.gold-rule`, `.drawer-in` — plus `.bg-grain`, `.gold-hairline`, `.weave`
 
 ### 5. No test suite (yet)
 `npm test` does not exist. When adding tests: Vitest + RTL for components, Playwright for E2E. Co-locate `*.test.tsx` next to component.
@@ -82,15 +83,16 @@ src/
 
 ## Environment
 
-**Required**: `DATABASE_URL` in `.env.local` (gitignored).  
-Example: `postgresql://postgres:postgres@127.0.0.1:5432/app_db`  
-Update to match your Postgres instance. Production needs `?sslmode=require`.
+**Required**: `DATABASE_URL` in `.env.local` (gitignored). Copy `.env.example` to start.  
+Local dev (docker compose): `postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev` — must match `docker-compose.yml` / `drizzle.config.json`.  
+Alternative plain postgres: `postgresql://postgres:postgres@127.0.0.1:5432/app_db`.  
+Production needs `?sslmode=require`.
 
 ## Common Gotchas
 
-- **Build fails without DB** — `npm run build` runs `getFullAudit()` at build time. Set `DATABASE_URL` or use a dummy DB for CI.
+- **Build does NOT require DB** — All data pages are `force-dynamic`, so `npm run build` skips `getFullAudit()` and succeeds even with `DATABASE_URL` unreachable. **Runtime** does require DB — check `GET /api/health` and see `src/app/error.tsx` fallback.
 - **ESLint warnings from `skills/`** — `npm run lint` shows warnings from `/skills/` directory (not project code). Ignore.
-- **Motion = transform/opacity only** — All CSS animations in `globals.css` use transform/opacity for `prefers-reduced-motion` compliance. Do not add keyframes that can't be reduced.
+- **Motion = transform/opacity only** — All CSS animations in `globals.css` (`.rise-in`, `.hero-ken-burns`, `.bloom-drift`, `.card-lift`, `.gold-rule`, `.drawer-in`) use transform/opacity for `prefers-reduced-motion` compliance (killed to `0.01ms` under `@media (prefers-reduced-motion: reduce)`). Do not add keyframes that use layout properties (width/height).
 - **Confidence tags on findings** — `audit-data.ts` findings carry `confidence: "verified" | "reasoned" | "assumed"`. Preserve when adding findings.
 - **Gold is shared** -- `--color-rule` `#d4ad42` is identical for both sites. Do not "uniquify" it.
 

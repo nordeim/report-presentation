@@ -52,7 +52,7 @@ Follow this six-phase workflow for all implementation tasks:
 - **Shared scaffold, distinct identity**: Both parish sites share a component/design system. This journal's value is in surfacing where the fork diverges (type, blue hue, accent tokens, IA choices) and where it does not (radii, motion, layout primitives).
 - **Confidence tagging**: Every finding carries `confidence: "verified" | "reasoned" | "assumed"`. Verified = traceable to source lines. Reasoned = inferred from CSS + docs. Assumed = best guess.
 - **No anonymous dumps**: Visitor reviews require a name (2–80 chars) and a substantive note (12–800 chars). Scores are 1–10 integers per dimension (Visual, UX, A11y).
-- **Accessibility floor is locked**: Skip link, 2px gold focus ring with 3px offset, `prefers-reduced-motion` kill-switch, semantic landmarks, drawer focus trap, Escape-to-close, single-open accordion. These contracts must not regress.
+- **Accessibility floor is locked (core)**: Skip link, 2px gold focus ring with 3px offset, `prefers-reduced-motion` kill-switch, semantic landmarks. These contracts must not regress. Drawer focus trap / Escape-to-close / single-open accordion are documented for the upstream parish sites and are aspirational for the journal `Masthead` (currently static) — implement before claiming WCAG AAA parity.
 
 ## Implementation Standards
 
@@ -78,12 +78,12 @@ Follow this six-phase workflow for all implementation tasks:
 
 - Design tokens defined in `src/app/globals.css` `@theme` block:
   - Fonts: `--font-display`, `--font-body`, `--font-sans`, `--font-fraunces`, `--font-cormorant`, `--font-source`
-  - Colors: `--color-ink`, `--color-paper`, `--color-rule`, `--color-bsc`, `--color-bsc-deep`, `--color-oll`, `--color-oll-deep`, `--color-rose`, `--color-sage`, `--color-cream`, etc.
+  - Colors (primitives): `--color-ink`/`--color-ink-soft`, `--color-paper`/`--color-paper-deep`, `--color-rule`/`--color-rule-soft` (gold `#b8943e`/`#d4ad42`), `--color-bsc`/`--color-bsc-deep`, `--color-oll`/`--color-oll-deep`, `--color-rose`, `--color-sage`, `--color-cream` — full tints (sapphire-300 etc.) live as data in `audit-data.ts` (18 tokens/site, not 33)
   - Shadow: `--shadow-journal`
-- No arbitrary values — extend `@theme` instead
-- Custom utilities: `.font-display`, `.font-sans`, `.font-fraunces`, `.font-cormorant`, `.font-source`, `.bg-grain`, `.gold-hairline`, `.weave`
+- No arbitrary **colors** outside `@theme` — extend `@theme` for colors/spacing/shadows. Editorial type scale (`text-[0.62rem]`, `tracking-[0.16em]`) is intentional and exempt.
+- Custom utilities: `.font-display`, `.font-sans`, `.font-fraunces`, `.font-cormorant`, `.font-source`, `.bg-grain`, `.gold-hairline`, `.weave`, plus motion system (`.rise-in`/`.d1`–`.d4`, `.hero-ken-burns`, `.bloom-drift`, `.card-lift`, `.gold-rule`, `.drawer-in` — all transform/opacity only)
 - Dark mode: not used (single cream/paper theme)
-- Reduced motion: `@media (prefers-reduced-motion: reduce)` disables all animations/transitions
+- Reduced motion: `@media (prefers-reduced-motion: reduce)` disables all animations/transitions (durations → 0.01ms)
 
 ### Drizzle ORM + PostgreSQL
 
@@ -114,6 +114,8 @@ npm install
 
 # Set up environment
 cp .env.example .env.local  # Edit DATABASE_URL to point to your Postgres instance
+# Local dev (docker compose): DATABASE_URL="postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev"
+# Must match docker-compose.yml + drizzle.config.json
 
 # Database: run migrations (or rely on auto-seed)
 # Drizzle Kit for migrations:
@@ -217,7 +219,7 @@ npm run typecheck
 
 - **API routes**: Validate input early, return 400 with `{ error: string }` for client errors, 500 with `{ error: string }` for server errors
 - **Database**: `ensureSeeded()` wraps insert in try/catch with re-check for race conditions
-- **Server Components**: `throw new Error(...)` for missing data — Next.js renders `error.tsx` (not yet present; add when needed)
+- **Server Components**: `throw new Error(...)` for missing data — Next.js renders `src/app/error.tsx` (DB-aware: shows `docker compose up -d postgres` hint) and `src/app/not-found.tsx` for 404s
 - **Client Components**: Toast/status messages via local state (`ReviewForm.status`)
 
 ### Debugging Tools
@@ -321,12 +323,12 @@ src/
 **Colors (BSC — Sapphire)**:
 - `--color-bsc` `#3458a8` (primary sapphire)
 - `--color-bsc-deep` `#0a1122` (hero/footer background)
-- Sapphire scale 50–950 in `@theme` (not all exposed as CSS vars; used via Tailwind)
+- Primitives in `@theme`; full tints (`bsc-sapphire-300 #7a9bdb`, `bsc-gold-400 #d4ad42`, pine/terracotta) live as 18 tokens/site in `audit-data.ts` (`PALETTE_SEEDS`)
 
 **Colors (OLL — Marian Blue)**:
 - `--color-oll` `#2c4a8e` (primary Marian blue)
 - `--color-oll-deep` `#0a1428` (hero/footer background)
-- Blue scale 50–950 + `--color-rose` `#8a4a5f` + `--color-sage` `#2f4f37`
+- Primitives in `@theme`; full tints (`oll-blue-300 #7f9fde`, `oll-gold-400 #d4ad42`, rose/sage) live as 18 tokens/site in `audit-data.ts`
 
 **Shared**:
 - `--color-ink` `#16130e`, `--color-ink-soft` `#3a342c`
@@ -338,24 +340,23 @@ src/
 
 ### Motion System (in `globals.css`)
 
-Utilities (not keyframes — all transform/opacity for reduced-motion compliance):
-- `.rise-in` — cubic-bezier(0.22, 1, 0.36, 1) with stagger delays `d1`–`d4`
-- `.hero-ken-burns` — 20s slow zoom
-- `.bloom-drift` — 14s subtle parallax
-- `.card-lift` — hover lift
-- `.gold-rule` — width animation on hover
-- `.drawer-in` — mobile nav slide
-- All gated by `@media (prefers-reduced-motion: reduce)` → durations = 0.01ms
+Utilities — all `transform`/`opacity` only for reduced-motion compliance (gated to `0.01ms` under `@media (prefers-reduced-motion: reduce)`):
+- `.rise-in` — `cubic-bezier(0.22, 1, 0.36, 1)` entrance with stagger `.d1`–`.d4` (0.08s steps) via `@keyframes rise-in`
+- `.hero-ken-burns` — 20s slow zoom (`scale 1 → 1.06`)
+- `.bloom-drift` — 14s subtle parallax (`translateY + scale` infinite alternate)
+- `.card-lift` — hover lift (`translateY(-3px)` transition)
+- `.gold-rule` — `scaleX(0→1)` draw on `.group:hover`
+- `.drawer-in` — 260ms slide (`translateY(-6px)` + opacity)
 
 ## Success Metrics
 
 You are successful when:
-- Audit data renders correctly across all pages (home, compare, findings, palettes, reviews, method)
+- Audit data renders correctly across all pages (home, compare, findings, palettes, reviews, method) — requires reachable `DATABASE_URL` at **runtime** (build itself does NOT need DB; `force-dynamic` skips `getFullAudit()` at build)
 - Visitor reviews persist to PostgreSQL and appear on `/reviews` after `router.refresh()`
 - TypeScript strict check passes (`npm run typecheck`)
 - ESLint passes (`npm run lint`)
-- Build succeeds (`npm run build`)
-- Accessibility contracts hold: skip link works, focus rings visible, reduced-motion kills all animation, drawer traps focus
+- Build succeeds (`npm run build` — succeeds even without DB)
+- Accessibility contracts hold: skip link works, focus rings visible, reduced-motion kills all animation; drawer trap / Escape applies to upstream parish drawer (journal `Masthead` is currently static)
 
 ## System Integration
 
@@ -374,10 +375,10 @@ You are successful when:
 - **Don't add tests without a test runner configured** — establish Vitest + Playwright first
 - **Don't use `any`** — the codebase compiles with `strict: true`; keep it that way
 - **Don't bypass `ensureSeeded()`** — all queries call it; direct DB access without seeding will fail on fresh DB
-- **Don't hardcode colors in components** — use Tailwind classes from `@theme` (`bg-bsc`, `text-oll`, `border-rule`)
+- **Don't hardcode colors in components** — use Tailwind classes from `@theme` (`bg-bsc`, `text-oll`, `border-rule`); editorial `text-[0.62rem]` is the one allowed arbitrary
 - **Don't add `'use client'` unnecessarily** — Server Components are default; only client for interactivity
 - **Don't mutate seed data at runtime** — `audit-data.ts` is the source of truth; DB is seeded once from it
-- **Don't skip accessibility** — the gold focus ring, skip link, and reduced-motion gate are non-negotiable
+- **Don't skip accessibility** — the gold focus ring, skip link, and reduced-motion gate are non-negotiable; drawer trap when you add a drawer
 - **Don't assume live SPA paint matches source** — the Method page explicitly documents this limitation
 
 ## Continuous Improvement
@@ -385,9 +386,9 @@ You are successful when:
 ### Known Gaps (tracked for future work)
 
 1. **No test suite** — Add Vitest + React Testing Library + Playwright
-2. **No `error.tsx` / `not-found.tsx`** — Add for graceful error boundaries
+2. ~~**No `error.tsx` / `not-found.tsx`** — Added in polish pass (`src/app/error.tsx` is DB-aware)~~
 3. **No pre-commit hooks** — Add Husky + lint-staged when tests exist
-4. **No CI/CD pipeline** — GitHub Actions for lint, typecheck, build, test
+4. **No CI/CD pipeline** — Add GitHub Actions for lint, typecheck, build, test (`.github/workflows/ci.yml` now covers lint+typecheck+build)
 5. **Image optimization** — Hero images are local `/public/images/*.jpg`; consider next/image remote patterns if migrating to CMS
 6. **Analytics/telemetry** — None currently; consider Vercel Analytics or Plausible if needed
 

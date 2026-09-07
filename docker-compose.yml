@@ -1,0 +1,46 @@
+# ══════════════════════════════════════════════════════════════════
+# Nave & Spire — Local Development Services
+# ══════════════════════════════════════════════════════════════════
+# Usage:
+#   Start:   docker compose up -d
+#   Stop:    docker compose down
+#   Reset:   docker compose down -v  (WARNING: deletes all data)
+#   Logs:    docker compose logs -f postgres
+# ══════════════════════════════════════════════════════════════════
+
+services:
+
+  # ─── PostgreSQL 17 ───────────────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: nave_spire_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nave_spire_dev
+      POSTGRES_USER: nave_spire_user
+      POSTGRES_PASSWORD: nave_spire_secret
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nave_spire_user -d nave_spire_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - nave_spire_net
+
+
+# ─── Named Volumes ─────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+
+# ─── Networks ──────────────────────────────────────────────────────
+networks:
+  nave_spire_net:
+    driver: bridge
