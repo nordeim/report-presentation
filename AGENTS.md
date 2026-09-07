@@ -7,13 +7,15 @@ Compact instructions for AI agents working in this repo.
 | Task | Command |
 |------|---------|
 | Install deps | `npm install` |
-| Dev server | `npm run dev` |
+| Dev server | `npm run dev` (`npx next dev --webpack` if Turbopack panics) |
 | Type check | `npm run typecheck` |
 | Lint | `npm run lint` |
 | Build | `npm run build` |
-| DB: generate migration | `npx drizzle-kit generate` |
-| DB: apply migrations | `npx drizzle-kit migrate` |
-| DB: studio (GUI) | `npx drizzle-kit studio` |
+| DB: setup (fresh clone → prod) | `npm run db:setup` (= `db:generate` + `db:migrate` + `db:seed`) |
+| DB: generate migration | `npm run db:generate` |
+| DB: apply migrations | `npm run db:migrate` |
+| DB: seed (idempotent) | `npm run db:seed` |
+| DB: studio (GUI) | `npm run db:studio` |
 
 ## Repo Identity
 
@@ -84,9 +86,9 @@ src/
 ## Environment
 
 **Required**: `DATABASE_URL` in `.env.local` (gitignored). Copy `.env.example` to start.  
-Local dev (docker compose): `postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev` — must match `docker-compose.yml` / `drizzle.config.json`.  
+Local dev (docker compose): `postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev` — must match `docker-compose.yml` / `drizzle.config.ts`.  
 Alternative plain postgres: `postgresql://postgres:postgres@127.0.0.1:5432/app_db`.  
-Production needs `?sslmode=require`.
+Production needs `?sslmode=require`. For fresh DB (clone → prod): `cp .env.example .env.local` → set `DATABASE_URL` → `sudo docker compose up -d` (or managed Postgres) → `npm run db:setup`.
 
 ## Common Gotchas
 
@@ -101,11 +103,13 @@ Production needs `?sslmode=require`.
 - `npm run typecheck` → `tsc --noEmit` (not `tsc`)
 - `npm run lint` → `eslint .` (flat config, extends Next.js core-web-vitals)
 - No `npm test`, `npm run test:watch`, etc.
-- Drizzle Kit commands via `npx` (not a script)
+- DB: `npm run db:setup` is the one-shot fresh-clone init (`generate` + `migrate` + `seed` via `src/scripts/seed.ts`); individual steps are `db:generate`/`db:migrate`/`db:seed`
+- `drizzle.config.ts` is env-aware (reads `DATABASE_URL` via `dotenv`); `drizzle.config.json` is the fallback
 
 ## References
 
 - `CLAUDE.md` — Full implementation standards, architecture, anti-patterns
 - `src/lib/audit-data.ts` — Source of truth for all scores, findings, palette tokens
 - `src/app/globals.css` — Design system (@theme tokens, motion utilities)
-- `drizzle.config.json` — DB dialect + schema location
+- `drizzle.config.ts` (env-aware) + `drizzle.config.json` (fallback) + `drizzle/` (committed migrations) — DB dialect + schema location
+- `src/scripts/seed.ts` — standalone seeder for `db:seed` / `db:setup`

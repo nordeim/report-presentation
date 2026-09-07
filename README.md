@@ -113,15 +113,20 @@ npm install
 # 2. Configure environment
 cp .env.example .env.local
 # Edit .env.local: set DATABASE_URL — local dev is "postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev"
-# Must match docker-compose.yml + drizzle.config.json. Or use plain postgres: "postgresql://postgres:postgres@127.0.0.1:5432/app_db"
+# Must match docker-compose.yml + drizzle.config.ts. Or use plain postgres: "postgresql://postgres:postgres@127.0.0.1:5432/app_db"
 
-# 3. (Optional) Run migrations explicitly
-# Otherwise auto-seeding runs on first request
-npx drizzle-kit generate
-npx drizzle-kit migrate
+# 3. Initialize database (fresh clone → production-ready)
+# Option A — one-shot setup (generate + migrate + seed): recommended for fresh clones and CI
+npm run db:setup
+# Option B — step-by-step (if you prefer explicit control)
+# npm run db:generate   # create drizzle/0000_*.sql from src/db/schema.ts (no-op if already generated)
+# npm run db:migrate    # apply drizzle/*.sql to DATABASE_URL (idempotent)
+# npm run db:seed       # idempotent seed via ensureSeeded() — 2 sites, 10 criteria, 20 scores, 10 findings, 36 tokens
+# Note: auto-seeding also runs on first request via getFullAudit() → ensureSeeded(),
+# so Option A is not strictly required — but it makes `npm run build && npm start` deterministic for production.
 
 # 4. Start development server
-npm run dev
+npm run dev             # use `npx next dev --webpack` if Turbopack dev panics (see Troubleshooting)
 ```
 
 ### Verify Setup
@@ -138,9 +143,9 @@ npm run dev
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `DATABASE_URL` | ✅ | PostgreSQL connection string — must match `docker-compose.yml` for local dev | `postgresql://maison:maison_local_dev@127.0.0.1:5432/maison_dev` (or `postgresql://postgres:postgres@127.0.0.1:5432/app_db` for plain postgres) |
+| `DATABASE_URL` | ✅ | PostgreSQL connection string — must match `docker-compose.yml` + `drizzle.config.ts` for local dev | `postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev` (or `postgresql://postgres:postgres@127.0.0.1:5432/app_db` for plain postgres) |
 
-**Production**: Add `?sslmode=require` to connection string. See `.env.example` for all variants.
+**Production**: Add `?sslmode=require` to connection string. See `.env.example` for all variants. For fresh production DB, run `npm run db:setup` after setting `DATABASE_URL`.
 
 ## Design System
 
@@ -229,14 +234,16 @@ All gated by `@media (prefers-reduced-motion: reduce)` → durations = `0.01ms` 
 | Task | Command |
 |------|---------|
 | Install deps | `npm install` |
-| Dev server | `npm run dev` |
+| Dev server | `npm run dev` (`npx next dev --webpack` if Turbopack panics) |
 | Type check | `npm run typecheck` |
 | Lint | `npm run lint` |
 | Build | `npm run build` |
-| DB: generate migration | `npx drizzle-kit generate` |
-| DB: apply migrations | `npx drizzle-kit migrate` |
-| DB: studio (GUI) | `npx drizzle-kit studio` |
-| DB: push schema (dev) | `npx drizzle-kit push` |
+| DB: setup (fresh clone → prod) | `npm run db:setup` (= `db:generate` + `db:migrate` + `db:seed`) |
+| DB: generate migration | `npm run db:generate` (`drizzle-kit generate`) |
+| DB: apply migrations | `npm run db:migrate` (`drizzle-kit migrate`) |
+| DB: seed (idempotent) | `npm run db:seed` (`tsx src/scripts/seed.ts` via `ensureSeeded()`) |
+| DB: studio (GUI) | `npm run db:studio` (`drizzle-kit studio`) |
+| DB: push schema (dev, no migration file) | `npm run db:push` (`drizzle-kit push`) |
 
 ## Deployment
 
@@ -263,7 +270,9 @@ npm run start
 
 | Issue | Solution |
 |-------|----------|
-| `npm run build` fails / pages show "DATABASE_URL is required" at **runtime** | Build itself does NOT need DB (`force-dynamic` skips `getFullAudit()` at build). Runtime does — ensure `DATABASE_URL` in `.env.local` matches `docker-compose.yml` (`maison_dev`). Check `GET /api/health` — see `src/app/error.tsx` fallback for DB hint. |
+| Fresh clone — how to init DB for production? | `cp .env.example .env.local` → set `DATABASE_URL` → `sudo docker compose up -d` (or point to managed Postgres) → `npm run db:setup` (generate + migrate + seed, idempotent). Verify `GET /api/health` → `{ok:true}` and `GET /api/audit` → 2 sites. |
+| `npm run build` fails / pages show "DATABASE_URL is required" at **runtime** | Build itself does NOT need DB (`force-dynamic` skips `getFullAudit()` at build). Runtime does — ensure `DATABASE_URL` in `.env.local` matches `docker-compose.yml` (`nave_spire_dev`). Check `GET /api/health` — see `src/app/error.tsx` fallback for DB hint. |
+| `npx next dev` panics `FileSystemPath … mattpocok-skills` | Known Tailwind v4 + Turbopack dev FS bug (only `next dev` with Turbopack). Use `npx next dev --webpack` locally; `next build` (also Turbopack) is unaffected. See `VALIDATION_REPORT.md` Appendix D. |
 | `npm run lint` shows warnings from `/skills/` directory | Expected — warnings come from tracked `skills/` folder, not project code. Ignore. |
 | Page returns empty data on fresh DB | Ensure `ensureSeeded()` runs — it's called by `getFullAudit()`. Check DB connectivity. |
 | Motion doesn't respect `prefers-reduced-motion` | All animations use transform/opacity only. Verify CSS in `globals.css` uses `@media (prefers-reduced-motion: reduce)`. |
@@ -279,4 +288,5 @@ MIT — see `LICENSE` (if present) or project root.
 - **AGENTS.md** — Compact agent onboarding instructions
 - `src/lib/audit-data.ts` — Source of truth for all scores, findings, palette tokens
 - `src/app/globals.css` — Design system (`@theme` tokens, motion utilities)
-- `drizzle.config.json` — DB dialect + schema location
+- `drizzle.config.ts` (env-aware, reads `DATABASE_URL`) + `drizzle.config.json` (fallback) — DB dialect + schema location; `drizzle/` holds committed migrations
+- `src/scripts/seed.ts` — standalone seeder (`ensureSeeded()`) for `npm run db:seed` / `db:setup`

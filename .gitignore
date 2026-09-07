@@ -45,6 +45,9 @@ docs/ssh-key.txt
 db/
 dev.log
 tool-results/
+server.log
+server.pid
+tsconfig.tsbuildinfo
 
 # user uploads & deliverables (kept local, never published)
 upload/
