@@ -135,7 +135,7 @@ npm run dev
 | `npm run start` | Start production server |
 | `npm run lint` | ESLint 9 (flat config, Next.js core-web-vitals) |
 | `npm run typecheck` | `tsc --noEmit` strict type check |
-| `npm test` / `npm run test:watch` | Vitest suite (18 tests) / watch mode |
+| `npm test` / `npm run test:watch` | Vitest suite (24 tests) / watch mode |
 
 ### Database Commands
 
@@ -155,7 +155,7 @@ npx drizzle-kit push
 
 ## Testing Strategy
 
-**Current state**: Vitest + React Testing Library landed (2026-09-07). `npm test` → `vitest run` (18 tests green); `npm run test:watch` for watch mode. Browser E2E was executed manually via agent-browser against the live site (see `docs/CODE_AUDIT_2026-09-07.md`); Playwright harness remains optional future work.
+**Current state**: Vitest + React Testing Library landed (2026-09-07). `npm test` → `vitest run` (24 tests green, incl. `src/regression/repo-hygiene.test.ts` — build-portability contracts: no tracked symlinks escaping the repo root, `.env.local` untracked, Tailwind scan scoped to `src/`, `skills/**` lint-ignored, `vitest.config.mts`); `npm run test:watch` for watch mode. Browser E2E was executed manually via agent-browser against the live site (see `docs/CODE_AUDIT_2026-09-07.md`); Playwright harness remains optional future work.
 
 ### Test Pyramid (as shipped)
 
@@ -369,7 +369,7 @@ You are successful when:
 - Visitor reviews persist to PostgreSQL and appear on `/reviews` after `router.refresh()` — and spam is throttled (429 after 5 req/min/IP)
 - TypeScript strict check passes (`npm run typecheck`)
 - ESLint passes (`npm run lint`)
-- Test suite passes (`npm test` — 18 tests)
+- Test suite passes (`npm test` — 24 tests)
 - Build succeeds (`npm run build` — succeeds even without DB)
 - Security headers present on every response (X-Frame-Options, nosniff, CSP `frame-ancestors 'none'`)
 - Accessibility contracts hold: skip link works, focus rings visible, reduced-motion kills all animation; drawer trap / Escape applies to upstream parish drawer (journal `Masthead` is currently static)
@@ -402,7 +402,7 @@ You are successful when:
 
 ### Known Gaps (tracked for future work)
 
-1. ~~**No test suite**~~ — Vitest + RTL landed 2026-09-07 (18 tests). Remaining: Playwright E2E harness + API-route integration tests with testcontainers
+1. ~~**No test suite**~~ — Vitest + RTL landed 2026-09-07 (24 tests). Remaining: Playwright E2E harness + API-route integration tests with testcontainers
 2. ~~**No `error.tsx` / `not-found.tsx`** — Added in polish pass (`src/app/error.tsx` is DB-aware)~~
 3. **No pre-commit hooks** — Add Husky + lint-staged (CI covers lint+typecheck+test+build on push/PR to main)
 4. ~~**No CI/CD pipeline** — `.github/workflows/ci.yml` covers lint+typecheck+test+build~~

@@ -6,9 +6,9 @@ description: >
   across 10 evidence-backed criteria. Covers the editorial @theme design system, RSC + force-dynamic
   + ensureSeeded() data contract, 6-table Drizzle schema, 18-token palettes, motion system,
   a11y floor, API validation, DB lifecycle, and every hard-won lesson from the audit → polish → live-DB verification.
-version: 1.1.0
+version: 1.2.0
 last_updated: 2026-09-07
-project_state: 6 components (3 client + error boundary), 6 tables, 10 criteria, 36 palette tokens, 10 findings, 18 vitest tests green, security headers + review rate limiter shipped, CI lint+typecheck+test+build green
+project_state: 6 components (3 client + error boundary), 6 tables, 10 criteria, 36 palette tokens, 10 findings, 24 vitest tests green, security headers + review rate limiter shipped, CI lint+typecheck+test+build green
 tags:
   - nextjs-16
   - react-19
@@ -163,8 +163,8 @@ curl -s http://127.0.0.1:3000/api/audit | jq '.audit.sites | length' # 2
 | `.env.example` | Env template | 1 var `DATABASE_URL` with local/alt/prod comments — `nave_spire_dev` primary. |
 | `.env.local` | Env (gitignored) | Same as `.env.example` but active; must stay in sync with `docker-compose.yml`. |
 | `.github/workflows/ci.yml` | CI | `runs-on: ubuntu-latest`, `setup-node@v4 (22, npm cache)`, `npm ci` → `npm run lint` → `npm run typecheck` → `npm test` → `npm run build` (with dummy `DATABASE_URL` for the `drizzle` import guard). |
-| `vitest.config.ts` | Test runner | jsdom env, `@vitejs/plugin-react`, `@` alias → `./src`, include `src/**/*.test.{ts,tsx}`. `npm test` = `vitest run`, `npm run test:watch` = `vitest`. |
-| `.gitignore` | Ignore | Excludes `.env.local`, `.next/`, `node_modules/`, `tsconfig.tsbuildinfo`, etc. |
+| `vitest.config.mts` | Test runner | jsdom env, `@vitejs/plugin-react`, `@` alias → `./src`, include `src/**/*.test.{ts,tsx}`, excludes `skills/**`. `npm test` = `vitest run`, `npm run test:watch` = `vitest`. `.mts` extension avoids Vite's ESM-loaded-as-CJS warning. |
+| `.gitignore` | Ignore | Excludes `.env.local`, `.next/`, `node_modules/`, `tsconfig.tsbuildinfo`, the 15 machine-local `skills/` symlink names, etc. |
 
 ### 3.3 Scripts
 
@@ -573,11 +573,11 @@ export async function insertReview(input:{reviewerName:string,preferredSite:stri
 **Root cause:** Audit language copied from upstream `src/index.css` without porting the CSS.
 **Fix:** Added 6 utilities + 5 keyframes to `globals.css` (all `transform`/`opacity` only) + gated to `0.01ms` — now `/_next/static/css` greps `rise-in` 7 hits.
 
-### AP-9 — Turbopack Dev Panic (High, external)
+### AP-9 — Machine-Local Symlinks Escape the Repo (High — FIXED v1.2.0)
 
-**Symptom:** `next dev` (Turbopack) → `FATAL: FileSystemPath("").join("../mattpocok-skills/...") leaves the filesystem root` → all pages 500, API routes still 200.
-**Root cause:** Tailwind v4 `@import "tailwindcss"` + `postcss: {"@tailwindcss/postcss":{}}` with Turbopack's filesystem root set to `src/app` — sibling directory `../mattpocok-skills` on the host (`/Home1/`) is traversed via PostCSS path resolution in dev mode only (build succeeds).
-**Fix:** `npx next dev --webpack` passes (webpack doesn't use Turbopack's virtual filesystem). CI uses `next build` (unaffected). Long-term: constrain Tailwind content globs or upstream Turbopack fix; pin `dev` to `next dev --webpack` if needed.
+**Symptom:** Turbopack (dev AND build) → `FATAL: FileSystemPath("").join("../mattpocok-skills/...") leaves the filesystem root`. In dev all pages 500 (API routes 200); in `next build` the whole build dies after "Creating an optimized production build" (see `start_server_log.txt`).
+**Root cause (corrected v1.2.0 — earlier hypothesis blamed a Turbopack dev-only bug):** 15 committed symlinks `skills/<name>` → **absolute** host paths (`/Home1/project/mattpocok-skills/skills/...`). On the owner's machine they resolve, and Tailwind v4's automatic content detection (running inside Turbopack's CSS pipeline) follows them outside the project root; Turbopack relativizes the target against the repo and the join escapes its virtual filesystem root → panic. On fresh clones/CI the links dangle and are skipped — which is why CI stayed green while the owner's build crashed. Reproduced byte-identically by committing an absolute escape symlink and building (see audit addendum).
+**Fix (shipped v1.2.0):** (1) `globals.css`: `@import "tailwindcss" source("../")` — auto-detection pinned to `src/`, so nothing outside the repo is ever scanned; (2) the 15 symlinks untracked and their names gitignored (owner recreates them locally; verified `git check-ignore`); (3) regression-pinned by `src/regression/repo-hygiene.test.ts` (no tracked symlink may escape the root or dangle). Verified: build passes with the hostile symlink still present.
 
 ### AP-10 — DB Cred Mismatch (`maison` vs `nave_spire`) (Critical)
 
@@ -606,9 +606,9 @@ export async function insertReview(input:{reviewerName:string,preferredSite:stri
 | `DATABASE_URL is required` at import | `.env.local` missing or not loaded | `cp .env.example .env.local` + ensure `DATABASE_URL` present. Drizzle import throws if absent — CI sets dummy URL for `next build`. | `node -e "require('dotenv').config({path:'.env.local'});console.log(!!process.env.DATABASE_URL)"` |
 | `ECONNREFUSED 127.0.0.1:5432` or `database "…_dev" does not exist` | Docker down or cred mismatch | `sudo docker compose up -d` + `pg_isready -U nave_spire_user -d nave_spire_dev` + align `.env.local`/`drizzle.config.json` to `nave_spire_dev` | `sudo docker exec nave_spire_postgres psql -U nave_spire_user -d nave_spire_dev -c "select 1"` |
 | `Audit seed missing parish sites` on page / `GET /api/audit → 500` | Tables empty (fresh `down -v`) or `ensureSeeded` never ran | `npx drizzle-kit push` (fresh) then `curl http://127.0.0.1:3000/` triggers `ensureSeeded` → re-check `select tablename from pg_tables` → 6 rows, then `select * from audit_sites` → 2 rows | `npx tsx --env-file=.env.local -e "import{getFullAudit}..."` |
-| `next dev` → Turbopack `FileSystemPath … mattpocok-skills` panic | Tailwind v4 + Turbopack dev filesystem root bug (see AP-9) | `npx next dev --webpack` — builds are unaffected (`next build` succeeds) | `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/` → 200 |
+| `next build`/`next dev` → Turbopack `FileSystemPath … mattpocok-skills` panic | FIXED v1.2.0 — was: committed machine-local `skills/` symlinks escaping the repo root (see AP-9) | Nothing — `source("../")` in `globals.css` + untracked/gitignored link names make dev and build root-safe on every machine | `git ls-files -s skills/ | awk '$1==120000'` → empty; `npm run build` → ✓ |
 | Page shows 0 findings / `null` scores | `TRUNCATE audit_sites CASCADE` without re-seed | Reload any page — `ensureSeeded` re-seeds; or `sudo docker exec … psql -c "truncate audit_sites cascade; truncate audit_criteria cascade"` then `curl /` | `select count(*) from audit_findings` → 10 |
-| `npm run lint` shows 12 warnings | `skills/` directory (`kimi-pdf/scripts/paged.polyfill.js`) | Expected — `AGENTS.md` says ignore. Project code has 0 warnings. | `npm run lint -- --no-warn` or `grep -v "skills/"` |
+| ~~`npm run lint` shows 12 warnings~~ RESOLVED v1.2.0 | was: vendored `skills/kimi-pdf/scripts/paged.polyfill.js` linted | `npm run lint` is now **0 errors / 0 warnings** — `skills/**` is in `eslint.config.mjs` `globalIgnores` | `npm run lint` → silent exit 0 |
 | `GET /api/reviews` POST → 400 `Name must be 2–80` | `reviewerName` length violation | Provide `2–80` chars (trimmed) — see `src/app/api/reviews/route.ts: asString + length check` | `curl -X POST /api/reviews -d '{"reviewerName":"A",…}'` → 400 |
 | `Note must be 12–800 characters.` | `comment` too short/long | `12–800` trimmed (see `ReviewForm.tsx: minLength 12 maxLength 800`) | Same |
 | `Pick Blessed Sacrament…` | `preferredSite` not in `{bsc,oll,tie}` | `ALLOWED_PREF Set(["bsc","oll","tie"])` | Same |
@@ -717,11 +717,11 @@ Build does not need a live DB; API smoke is manual (requires `docker compose up 
 **Why it mattered:** Audit language had no CSS backing — `rise-in` grep was 0 hits.
 **How to avoid:** When audit copy cites a utility, the CSS must exist. Port upstream `src/index.css` utilities *before* citing them in `SCORE_NOTES`.
 
-### L-4 — Sibling-Dir Scan Panics Turbopack (AP-9)
+### L-4 — Machine-Local Symlinks Crash Turbopack (AP-9 — corrected v1.2.0)
 
-**What happened:** `next dev` (Turbopack) panicked on `globals.css` with `FileSystemPath … ../mattpocok-skills … leaves the filesystem root` — while `next build` (same Turbopack) succeeded and `next dev --webpack` passed. Tailwind v4's `@import "tailwindcss"` + Turbopack dev FS root (`src/app`) + host sibling `../mattpocok-skills` triggered path traversal.
-**Why it mattered:** All pages 500 in dev, API routes 200 — confusing split.
-**How to avoid:** Keep `postcss.config.mjs` minimal (`{"@tailwindcss/postcss":{}}`), avoid sibling dirs with `skills/` names on the host, or pin `dev` to `next dev --webpack` until upstream fix. CI is safe (uses `next build`).
+**What happened:** Turbopack panicked on `globals.css` with `FileSystemPath … ../mattpocok-skills … leaves the filesystem root` — in **dev AND `next build`**. The v1.1.0 diagnosis ("dev-only, build unaffected, Turbopack FS-root bug") was wrong: `start_server_log.txt` captured a fatal build panic, and a byte-identical repro (absolute symlink to an existing out-of-root dir → build) confirmed it.
+**True root cause:** 15 committed symlinks `skills/<name>` → **absolute** host paths. Where they resolve (owner's machine), Tailwind v4 auto-detection follows them out of the project root inside Turbopack's CSS pipeline; where they dangle (CI, fresh clones) they are skipped — so only the owner saw it.
+**How it's fixed:** `source("../")` scope in `globals.css` (nothing outside `src/` is ever scanned), links untracked + names gitignored, `repo-hygiene.test.ts` pins the contract. Build verified green **with** the hostile link present.
 
 ### L-5 — Three-Way Cred Sync (AP-10)
 
@@ -772,7 +772,7 @@ Build does not need a live DB; API smoke is manual (requires `docker compose up 
 | P-9 | Uniquify gold | Change `--color-rule` on one site to "differentiate" | Keep `#b8943e`/`#d4ad42` identical — the shared metal is the point |
 | P-10 | Blind `drizzle-kit push` on prod | `push` on a DB with data | Use `npx drizzle-kit generate` + `migrate` for incremental prod changes; `push` only on fresh dev |
 | P-11 | Forget image commit | Add `heroImage: "/images/foo.jpg"` without `public/images/foo.jpg` | `ls public/images/` + `file` + `curl -I` in pre-ship |
-| P-12 | Ignore `skills/` lint noise as project error | Fail CI on 12 `skills/` warnings | `npm run lint` 12 warnings are `skills/kimi-pdf/...` — expected; CI checks `0 errors` |
+| P-12 | Treat `skills/` lint noise as expected, or commit machine-local skill symlinks | Historic: 12 permanent warnings masked real regressions; committed absolute symlinks crashed the owner's `next build` (AP-9) | `skills/**` is in ESLint `globalIgnores` (0 warnings since v1.2.0) and the 15 link names are gitignored — `src/regression/repo-hygiene.test.ts` fails the build if either regresses |
 | P-13 | Misalign DB creds | Change `docker-compose.yml` POSTGRES_* without updating `.env.example`/`drizzle.config.json` | Sync all three; verify `pg_isready -U nave_spire_user -d nave_spire_dev` |
 
 ---
@@ -829,7 +829,7 @@ Build does not need a live DB; API smoke is manual (requires `docker compose up 
 
 ### 14.7 Testing (landed 2026-09-07)
 
-- **Vitest + RTL** configured (`vitest.config.ts`, jsdom, `@` alias). `npm test` = one-shot `vitest run` (18 tests); `npm run test:watch` for watch mode. CI runs it.
+- **Vitest + RTL** configured (`vitest.config.mts` — `.mts` so Vite loads the ESM config natively, jsdom, `@` alias). `npm test` = one-shot `vitest run` (24 tests incl. `src/regression/repo-hygiene.test.ts`); `npm run test:watch` for watch mode. CI runs it.
 - Co-located suites: `src/lib/format.test.ts` (formatters + no-raw-hex token rule), `src/db/schema.test.ts` (6 tables ≡ `drizzle/0000_wise_gateway.sql` — a drift here means `drizzle-kit generate` would emit a migration), `src/lib/server/rate-limit.test.ts` (allow/block/window/bounded map), `src/regression/docs-drift.test.ts` (retired `maison_dev` identifier guard).
 - E2E: manual agent-browser pass against the live site is documented in `docs/CODE_AUDIT_2026-09-07.md` (filters, clipboard, review submit 201 + persistence, validation matrix, XSS escaping, mobile 375px, skip link, reduced-motion). A Playwright harness remains optional future work — co-locate specs under `e2e/` when added.
 
@@ -1324,6 +1324,7 @@ export function contrastText(hex: string): string; // YIQ ≥160 → #16130e els
 | ADR-7 | `next/image` `fill` + `object-cover`, `priority` only on hero | Above-the-fold hero benefits from `priority`; other images lazy by default. | `studio-hero.jpg` `priority`, parish cards lazy (no `priority`). | `src/app/page.tsx` + `compare/page.tsx` |
 | ADR-8 | No auth, reviews are named but not emailed | "No anonymous dumps" without building auth — `reviewerName` 2–80 is the social contract. | `preferredSite ∈ {bsc,oll,tie}` + `visual/ux/a11y 1–10` + `comment 12–800`. | `src/app/api/reviews/route.ts` |
 | ADR-9 | Motion `transform`/`opacity` only, gated to `0.01ms` | Lighthouse ≥95, `prefers-reduced-motion` AAA, no layout thrashing. | 6 utilities + 5 keyframes in `globals.css`; all killed under `@media (prefers-reduced-motion:reduce)`. | `src/app/globals.css` |
+| ADR-10 | Tailwind auto-detection scoped to `src/` (`source("../")`); machine-local `skills/` symlinks untracked + gitignored | The whole-repo scan followed committed absolute symlinks outside the project root → Turbopack root-escape panic on the owner's machine (AP-9); scoping makes the build independent of what sits next to the repo on disk. All UI code lives in `src/`, so detection loses nothing. | `globals.css: @import "tailwindcss" source("../")`; `git ls-files -s skills/` → no mode-120000 entries; pinned by `repo-hygiene.test.ts`. | `src/app/globals.css:1` + `.gitignore` skills section |
 
 ---
 
@@ -1353,6 +1354,7 @@ export function contrastText(hex: string): string; // YIQ ≥160 → #16130e els
 | ** Polish P0/P1** | 2026-09-07 | — | 12 files: `public/images` 4 JPEG placeholders (sharp), `.env.example`, `.env.local`+`drizzle.config`→`nave_spire_dev`, `globals.css` 6 motion utilities + 5 keyframes, `palettes/page.tsx` 33→18, `error.tsx` (DB-aware) + `not-found.tsx`, `.github/workflows/ci.yml`, `AGENTS.md`/`CLAUDE.md`/`README.md` all corrected. | `typecheck` 0, `lint` 0, `build` 7.9s, `next dev --webpack` 200 on all 6 pages |
 | ** Live DB init** | 2026-09-07 | Docker `nave_spire_postgres` healthy, `push` 6 tables, `getFullAudit` seed 2/10/20/10/36 → 3 reviews persisted **(local dev DB — the live prod DB was at 0 reviews until the 2026-09-07 E2E pass wrote 2 smoke rows)**, API 400 matrix verified, 6 pages 200, 4 images 200, CSS motion hits verified. | `.env.*` + `drizzle.config` aligned to `nave_spire_dev`; `VALIDATION_REPORT.md` → 430 lines. | Live: `GET /api/health` 200, `POST /api/reviews` 201×3, `psql count(*)=3` |
 | **Tiered audit + remediation** | 2026-09-07 | Deep audit (`skills/code-review-and-audit` + native fallbacks) + live browser E2E. Findings: C1 `src/db/` never committed (build/typecheck broken on fresh clone), C3 `error.tsx` still said `maison_dev`, H2 3 high npm vulns, M1 no security headers, M2 no rate limiting, M3 envelope doc drift, M4 raw-hex severity colors, M5 no tests; 3 false positives retracted after `od` byte inspection (C2/L4/L5). | Reconstructed `src/db/{index,schema}.ts` (drizzle-kit generate → no-op = byte-compatible); fixed error hint; `npm audit fix` (next 16.3.4, postcss 8.5.28, sharp 0.35.4); `next.config.ts` security headers; per-IP rate limiter + 429; `@theme` severity tokens; Vitest suite (18 tests); docs realigned (AGENTS/CLAUDE/README/SKILL v1.1.0). Evidence: `docs/CODE_AUDIT_2026-09-07.md`. | `npm test` 18/18, `typecheck` 0, `lint` 0 errors, `build` ✓, headers + 429 verified on local prod server |
+| **start_server_log triage → build portability** | 2026-09-07 | `start_server_log.txt`: all pre-build steps green, then `next build` FATAL Turbopack panic `FileSystemPath("").join("../mattpocok-skills/...")`. Reproduced byte-identically (absolute escape symlink + sibling dir). Also found: `.env.local` force-committed; 12 lint warnings from vendored `skills/` polyfill; vitest ESM-as-CJS warning; docker sudo-fallback stderr leak; stale "no test suite" script comments; `.env.example` URL-format typo. | `globals.css` `source("../")` (build proven green with hostile link present); 15 machine-local symlinks untracked + names gitignored; `.env.local` untracked; `skills/**` → ESLint `globalIgnores` (0/0); `vitest.config.ts` → `.mts`; `start_server.sh` fallback quieting + real gate semantics; `.env.example` typo fixed; new `repo-hygiene.test.ts` (6 contracts); docs realigned (SKILL v1.2.0, AP-9/L-4 corrected, ADR-10). | `npm test` 24/24, `typecheck` 0, `lint` 0 errors/0 warnings, `build` ✓, `drizzle generate` no-op, `git check-ignore` verified |
 
 ---
 
@@ -1420,13 +1422,13 @@ Currently `METHOD_NOTES.confidence` says: "A headed browser pass over the runnin
 | **DB** | `sudo docker compose up -d` (`nave_spire_postgres`, `nave_spire_dev`) |
 | **Schema push** | `npx drizzle-kit push` (fresh) or `generate`+`migrate` (incremental) |
 | **Quality** | `npm run typecheck` → `npm run lint` → `npm test` → `npm run build` (or `.github/workflows/ci.yml`) |
-| **Tests** | `src/lib/format.test.ts`, `src/db/schema.test.ts`, `src/lib/server/rate-limit.test.ts`, `src/regression/docs-drift.test.ts` (18 via `vitest run`) |
+| **Tests** | `src/lib/format.test.ts`, `src/db/schema.test.ts`, `src/lib/server/rate-limit.test.ts`, `src/regression/docs-drift.test.ts`, `src/regression/repo-hygiene.test.ts` (24 via `vitest run`) |
 | **Security** | `next.config.ts` headers() (XFO/nosniff/CSP), `src/lib/server/rate-limit.ts` (5 req/min/IP on POST /api/reviews) |
 | **Smoke** | `GET /api/health` → `GET /api/audit` → `for p in /*; curl $p` → `POST /api/reviews` → `psql count(*)` (see §11) |
 | **Docs** | `AGENTS.md` (compact), `CLAUDE.md` (standards), `README.md` (onboarding), `VALIDATION_REPORT.md` (430 lines), `docs/CODE_AUDIT_2026-09-07.md` (tiered audit + E2E evidence) |
-| **Skill** | This file — `nave-spire_SKILL.md` v1.1.0 |
+| **Skill** | This file — `nave-spire_SKILL.md` v1.2.0 |
 
 ---
 
-*End of skill — v1.1.0 · 2026-09-07 · All claims verified against the live codebase (npm test 18/18, typecheck 0, lint 0 errors, build ✓, security headers + 429 verified on local prod server, live browser E2E pass on https://nave-spire.jesspete.shop/ — see docs/CODE_AUDIT_2026-09-07.md). When extending, respect §1's five non-negotiables — especially source-over-screenshot and shared-gold. For drift detection, run the smoke in Appendix D and compare against §19 hexes and §20 interfaces.*
+*End of skill — v1.2.0 · 2026-09-07 · All claims verified against the live codebase (npm test 24/24, typecheck 0, lint 0 errors/0 warnings, build ✓, security headers + 429 verified on local prod server, live browser E2E pass on https://nave-spire.jesspete.shop/ — see docs/CODE_AUDIT_2026-09-07.md). When extending, respect §1's five non-negotiables — especially source-over-screenshot and shared-gold. For drift detection, run the smoke in Appendix D and compare against §19 hexes and §20 interfaces.*
 

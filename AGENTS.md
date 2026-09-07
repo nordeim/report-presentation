@@ -50,7 +50,7 @@ No arbitrary Tailwind **colors** outside `@theme`. Editorial type scale (`text-[
 - Motion utilities (all transform/opacity only): `.rise-in` (+ `.d1`–`.d4` stagger), `.hero-ken-burns` (20s), `.bloom-drift` (14s), `.card-lift`, `.gold-rule`, `.drawer-in` — plus `.bg-grain`, `.gold-hairline`, `.weave`
 
 ### 5. Test suite (Vitest + RTL)
-`npm test` runs 18 unit/component tests (`vitest run`). Co-locate `*.test.ts(x)` next to the module: `src/lib/format.test.ts`, `src/db/schema.test.ts` (pins schema ≡ `drizzle/0000_wise_gateway.sql`), `src/lib/server/rate-limit.test.ts`, `src/regression/docs-drift.test.ts` (retired-identifier guard). E2E: browser passes are manual/playwright — see `docs/CODE_AUDIT_2026-09-07.md`. New logic ships with tests (red → green).
+`npm test` runs 24 unit/component/regression tests (`vitest run`). Co-locate `*.test.ts(x)` next to the module: `src/lib/format.test.ts`, `src/db/schema.test.ts` (pins schema ≡ `drizzle/0000_wise_gateway.sql`), `src/lib/server/rate-limit.test.ts`, `src/regression/docs-drift.test.ts` (retired-identifier guard), `src/regression/repo-hygiene.test.ts` (build-portability contracts — see Gotchas). E2E: browser passes are manual/playwright — see `docs/CODE_AUDIT_2026-09-07.md`. New logic ships with tests (red → green).
 
 ### 6. TypeScript strict = enforced
 `strict: true`, `noEmit: true`, `isolatedModules: true`. Never use `any`. Prefer `interface` for object shapes. Explicit `Promise<>` returns on exported async functions.
@@ -105,7 +105,8 @@ Production needs `?sslmode=require`. For fresh DB (clone → prod): `cp .env.exa
 - **Commit everything the deploy needs** — `src/db/` once shipped only in the deploy workspace and the fresh-clone build broke (see `docs/CODE_AUDIT_2026-09-07.md` C1). Pre-ship on a fresh clone: `npm ci && npm test && npm run typecheck && npm run build`.
 - **`POST /api/reviews` is rate-limited** — 5 req/min per IP via `src/lib/server/rate-limit.ts`; over the limit returns `429` + `Retry-After`. The limiter is in-memory per instance.
 - **Security headers live in `next.config.ts`** — X-Frame-Options/nosniff/Referrer-Policy/Permissions-Policy/CSP. Don't remove `frame-ancestors 'none'`.
-- **ESLint warnings from `skills/`** — `npm run lint` shows warnings from `/skills/` directory (not project code). Ignore.
+- **Never commit machine-local `skills/` symlinks or `.env.local`** — the 15 `skills/<name>` links point at absolute host paths outside the repo; where they resolve, Tailwind v4 auto-detection follows them and Turbopack panics (`FileSystemPath … leaves the filesystem root` — fatal in `next build` AND `next dev`, see AP-9 in the SKILL). Their names are gitignored (recreate locally with `ln -s`); `.env.*` is gitignored too; `src/regression/repo-hygiene.test.ts` fails if either is ever tracked again.
+- **ESLint is 0 errors / 0 warnings** — `skills/**` is vendored agent tooling and lives in `eslint.config.mjs` `globalIgnores`. Don't lint it; don't remove the ignore.
 - **Motion = transform/opacity only** — All CSS animations in `globals.css` (`.rise-in`, `.hero-ken-burns`, `.bloom-drift`, `.card-lift`, `.gold-rule`, `.drawer-in`) use transform/opacity for `prefers-reduced-motion` compliance (killed to `0.01ms` under `@media (prefers-reduced-motion: reduce)`). Do not add keyframes that use layout properties (width/height).
 - **Confidence tags on findings** — `audit-data.ts` findings carry `confidence: "verified" | "reasoned" | "assumed"`. Preserve when adding findings.
 - **Gold is shared** -- `--color-rule` `#d4ad42` is identical for both sites. Do not "uniquify" it.
@@ -114,7 +115,7 @@ Production needs `?sslmode=require`. For fresh DB (clone → prod): `cp .env.exa
 
 - `npm run typecheck` → `tsc --noEmit` (not `tsc`)
 - `npm run lint` → `eslint .` (flat config, extends Next.js core-web-vitals)
-- `npm test` → `vitest run` (18 unit/component tests); `npm run test:watch` for watch mode
+- `npm test` → `vitest run` (24 unit/component/regression tests); `npm run test:watch` for watch mode
 - DB: `npm run db:setup` is the one-shot fresh-clone init (`generate` + `migrate` + `seed` via `src/scripts/seed.ts`); individual steps are `db:generate`/`db:migrate`/`db:seed`
 - `drizzle.config.ts` is env-aware (reads `DATABASE_URL` via `dotenv`); `drizzle.config.json` is the fallback
 

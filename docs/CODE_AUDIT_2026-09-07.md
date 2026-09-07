@@ -112,3 +112,72 @@ Mode: `deep` per `skills/code-review-and-audit` (audit_runner.py deep + native C
 | audit_runner.py deep (repo-wide + src-scoped) | skills/code-review-and-audit | phase-3 findings triaged; 34 "credentials" = hex-color false positives (documented) |
 | live E2E | agent-browser + curl (full journey) | pass; 2 test rows written (I2) |
 | git history | `git ls-tree` all 6 commits | `src/db` never committed (C1) |
+
+---
+
+## Addendum — Session 3: `start_server_log.txt` triage → build portability (2026-09-07)
+
+### Evidence
+
+`start_server_log.txt` (owner's machine, `/Home1/project/report-presentation`, Node v24.19.0 / Next 16.3.4):
+prerequisites, env, deps, DB setup (generate → migrate → seed, 6 tables), typecheck, lint
+(0 errors / 12 warnings), tests (18/18) all **green** — then `next build` died twice
+(before and after `rm -rf .next`):
+
+```
+FATAL: An unexpected Turbopack error occurred.
+[project]/src/app/globals.css [app-client] (css)
+FileSystemPath("").join("../mattpocok-skills/skills/engineering/ask-matt") leaves the filesystem root
+```
+
+### Root cause (proven by byte-identical reproduction)
+
+`git ls-files -s skills/` contained **15 symlinks (mode 120000) targeting absolute host
+paths** — `skills/ask-matt -> /Home1/project/mattpocok-skills/skills/engineering/ask-matt`,
+and 14 more like it. On the owner's machine the sibling `mattpocok-skills` clone exists, so
+the links resolve; Tailwind v4 automatic content detection (running inside Turbopack's CSS
+pipeline: `parse_css → PostCssTransformedAsset → evaluate_webpack_loader`) follows them
+outside the project root, and Turbopack relativizes the target against the repo, then joins
+it against an empty virtual base → root-escape panic. On fresh clones / CI the links dangle
+and the scanner skips them — which is why CI never caught it and why this workspace built
+green at v1.1.0.
+
+Reproduction in this workspace: created sibling
+`/home/z/my-project/mattpocok-skills/skills/engineering/ask-matt/`, pointed
+`skills/ask-matt` at it with an **absolute** path → `npm run build` panicked with the
+**byte-identical** error above (a relative `../` symlink did *not* panic — Turbopack handles
+those differently, matching the owner's absolute-link setup).
+
+This also **corrects two v1.1.0 doc claims**: SKILL AP-9/L-4 and the README had blamed a
+"dev-only Turbopack FS bug, `next build` unaffected" — the log disproves both.
+
+### Secondary findings
+
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| F1a | Critical | Build panic on owner machine (above) | `globals.css`: `@import "tailwindcss" source("../")` — detection pinned to `src/`; build proven green with the hostile symlink still present |
+| F1b | Critical | 15 machine-local symlinks tracked | `git rm` + names gitignored (`/skills/<name>` ×15); `git check-ignore` verified; owner recreates links locally |
+| F2 | Medium | `.env.local` (with dev creds) force-committed despite `.env.*` ignore rule | `git rm --cached .env.local` (worktree copy kept); rotation advisory: creds `nave_spire_user:nave_spire_secret` were already public as the documented `drizzle.config.ts` fallback — rotate only if ever used on a hosted DB |
+| F3a | Low | `.env.example` URL-format doc typo `]ost[:port]]` (propagated into the committed `.env.local`) | Fixed to `[user[:password]@]host[:port][/database][?options]` (byte-verified) |
+| F3b | Low | 12 permanent ESLint warnings from vendored `skills/kimi-pdf/scripts/paged.polyfill.js` | `skills/**` added to `globalIgnores` → lint now 0 errors / 0 warnings |
+| F3c | Low | Vite warning: ESM `vitest.config.ts` loaded as CJS | Renamed to `vitest.config.mts` (no references to the old name outside docs, updated) |
+| F3d | Low | `start_server.sh`: unsudoed `docker compose up -d` stderr leaked ("permission denied … docker.sock") even when the sudo fallback succeeded | First attempt output captured, surfaced only if both attempts fail |
+| F3e | Low | `start_server.sh` stale comments ("no test suite yet — Known Gap", "0 tests") + convoluted test-gate probe | Comments corrected; gate now runs `npm test` unconditionally (enforced via `set -euo pipefail`, same as typecheck/lint); `bash -n` clean |
+
+### TDD record
+
+New `src/regression/repo-hygiene.test.ts` (6 contracts) — RED first: all 6 failed for the
+documented reasons (15-offender symlink array, tracked `.env.local`, `.env.example` typo,
+missing `source("../")`, missing `"skills/**"` ignore, missing `vitest.config.mts`) — then
+GREEN after the fixes. Suite: 24/24. Gates re-run: typecheck 0, lint 0/0, build ✓,
+`drizzle-kit generate` no-op, `bash -n start_server.sh` clean.
+
+### Follow-ups for the owner
+
+1. `git pull` on the owner machine will delete the 15 local symlinks (tracked-file
+   deletion) — recreate them locally (see the recipe in `.gitignore`); they now stay
+   untracked.
+2. `.env.local` remains on disk locally (untracked); consider rotating its credentials if
+   they were ever reused outside the local docker DB.
+3. `npm audit` still reports 4 moderate dev-only vulns (esbuild/drizzle-kit chain) —
+   deferred as breaking; unchanged from session 2.
