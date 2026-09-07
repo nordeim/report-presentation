@@ -8,14 +8,6 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-/**
- * 6-table schema for the audit journal. This file is the reconstruction of
- * drizzle/0000_wise_gateway.sql — keep it byte-compatible with that
- * migration (verify: `npx drizzle-kit generate` must emit no new migration).
- * Foreign keys deliberately use ON DELETE no action (no cascades) — see
- * nave-spire_SKILL.md ADR-4.
- */
-
 export const sites = pgTable("audit_sites", {
   id: serial("id").primaryKey(),
   slug: varchar("slug", { length: 32 }).notNull().unique(),
@@ -60,7 +52,6 @@ export const scores = pgTable("audit_scores", {
 
 export const findings = pgTable("audit_findings", {
   id: serial("id").primaryKey(),
-  // Nullable siteSlug = shared finding (applies to both sites).
   siteSlug: varchar("site_slug", { length: 32 }),
   severity: varchar("severity", { length: 16 }).notNull(),
   title: text("title").notNull(),
@@ -92,20 +83,12 @@ export const reviews = pgTable("audit_reviews", {
   uxScore: integer("ux_score").notNull(),
   a11yScore: integer("a11y_score").notNull(),
   comment: text("comment").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export type Site = typeof sites.$inferSelect;
-export type NewSite = typeof sites.$inferInsert;
 export type Criterion = typeof criteria.$inferSelect;
-export type NewCriterion = typeof criteria.$inferInsert;
 export type Score = typeof scores.$inferSelect;
-export type NewScore = typeof scores.$inferInsert;
 export type Finding = typeof findings.$inferSelect;
-export type NewFinding = typeof findings.$inferInsert;
 export type PaletteToken = typeof paletteTokens.$inferSelect;
-export type NewPaletteToken = typeof paletteTokens.$inferInsert;
 export type Review = typeof reviews.$inferSelect;
-export type NewReview = typeof reviews.$inferInsert;
