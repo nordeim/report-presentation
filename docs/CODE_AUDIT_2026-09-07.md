@@ -181,3 +181,15 @@ GREEN after the fixes. Suite: 24/24. Gates re-run: typecheck 0, lint 0/0, build 
    they were ever reused outside the local docker DB.
 3. `npm audit` still reports 4 moderate dev-only vulns (esbuild/drizzle-kit chain) —
    deferred as breaking; unchanged from session 2.
+
+---
+
+## Addendum — 2026-09-08: Validation of `docs/session_2.md` + Living-Docs Alignment
+
+**Scope of this addendum:** `docs/session_2.md` (222 lines) was re-traced against `main@5d0dd3d` and the just-written `docs/VALIDATION_2026-09-08.md (GO)`.
+
+**Finding:** `session_2.md` is accurate as a Session 2 worklog (C1 `src/db/` missing → reconstruct, `maison_dev` residue, `]ost` typo, `0 headers`, `18 tests at 3b14119`, `7 commits` pushed). All its claims that were labelled *false positives* (`ci.yml ain]`, `start_server.sh` L4/L5) were correctly retracted in-session with `od -c` byte proof. No live invariant in this audit is contradicted by that worklog.
+
+**What was superseded:** The test count `18 → 24` (6 `repo-hygiene` contracts landed in Session 3, `44a9d2e`), and `SKILL v1.1.0 → v1.2.0` (symlink build-panic `AP-9/L-4` remediation + ADR-10). Those deltas are living-doc changes, not worklog rewrites — `session_2.md` now carries a header stamp pointing to `VALIDATION_2026-09-08.md` and is preserved verbatim below it.
+
+**Validation outcome:** `VALIDATION_2026-09-08.md §2` re-traces every `AGENTS/CLAUDE/README/SKILL` claim against the live filesystem + `next start` + `postgres:17-alpine`; result `GO` with only three low doc lags (README badge `18→24`, SKILL `14→15 primitives`, one noted split-brain `v1.0.0` global skill copy — now synced to `v1.2.0`). No new code audit finding is introduced by `session_2.md`.

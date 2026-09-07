@@ -1413,7 +1413,7 @@ Currently `METHOD_NOTES.confidence` says: "A headed browser pass over the runnin
 | **DB schema** | `src/db/schema.ts` (6 pgTable) |
 | **Query boundary** | `src/lib/queries.ts` (`getFullAudit()`, `insertReview()`) + `src/lib/seed.ts` (`ensureSeeded()`) |
 | **Format helpers** | `src/lib/format.ts` (`formatScore`, `severityClass`, `confidenceLabel`, `siteLabel`, `contrastText`) |
-| **Design tokens** | `src/app/globals.css @theme` (14 primitives + shadow) |
+| **Design tokens** | `src/app/globals.css @theme` (15 primitives + shadow) |
 | **Motion** | `src/app/globals.css` (6 utilities + 5 keyframes, all `transform`/`opacity`) |
 | **Components** | `src/components/{Masthead,StudioFooter,ScoreBar,FindingsBoard,CopySwatch,ReviewForm}.tsx` (6, 3 client) |
 | **Pages** | `src/app/{page,compare,findings,palettes,reviews,method}/page.tsx` + `error.tsx` + `not-found.tsx` |

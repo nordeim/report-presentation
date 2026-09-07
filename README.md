@@ -6,7 +6,7 @@
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.1.17-06B6D4?logo=tailwindcss&logoColor=white)
 ![Drizzle ORM](https://img.shields.io/badge/Drizzle%20ORM-0.45.2-C5F74F?logo=drizzle&logoColor=black)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-vitest%2018%2F18-brightgreen)
+![Tests](https://img.shields.io/badge/tests-vitest%2024%2F24-brightgreen)
 
 A design audit journal comparing two Singapore parish websites — **Church of the Blessed Sacrament (BSC)** and **Church of Our Lady of Lourdes (OLL)** — across ten evidence-backed criteria. Scores are derived from source tokens, components, and information architecture, not from rendered screenshots.
 
