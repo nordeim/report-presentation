@@ -106,7 +106,7 @@ tags:
 
 | Var | Required | Where | Example | Note |
 |-----|----------|-------|---------|------|
-| `DATABASE_URL` | Yes | `.env.local` (gitignored) | `postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev` | Must match `docker-compose.yml` + `drizzle.config.json`. Plain postgres alt: `postgresql://postgres:postgres@127.0.0.1:5432/app_db`. Prod add `?sslmode=require`. Template at `.env.example`. |
+| `DATABASE_URL` | Yes | `.env.local` (gitignored) | `postgresql://nave_spire_user:nave_spire_secret@127.0.0.1:5432/nave_spire_dev` | Must match `docker-compose.yml` + `drizzle.config.ts` (`.json` fallback). Plain postgres alt: `postgresql://postgres:postgres@127.0.0.1:5432/app_db`. Prod add `?sslmode=require`. Template at `.env.example`. |
 
 `src/db/index.ts:8` throws `DATABASE_URL is required` if absent — this is correct; `npm run build` still succeeds because `force-dynamic` skips DB at build, but any runtime request will throw (caught by `src/app/error.tsx` + `GET /api/health` → 500 via `db.execute(sql\`select 1\`)`).
 
